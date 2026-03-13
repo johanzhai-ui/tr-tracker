@@ -1152,7 +1152,6 @@ function filterPositions(f,btn){
   posFilter=f;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  renderPortfolio();
 }
 
 function exportCSV(){
@@ -1429,38 +1428,29 @@ document.addEventListener('touchstart',e=>{
   }
 });
 
-async function refreshData(){
-  const icon=document.getElementById('refresh-icon');
-  if(icon)icon.classList.add('spin');
-
 // ── STREAK RENDERER ──
 function renderStreak(){
   const el=document.getElementById('d-streak-content');
   if(!el)return;
   const trades=entries.filter(e=>e.category==='trade'||!e.category).sort((a,b)=>a.date.localeCompare(b.date));
   if(!trades.length){el.innerHTML='<div class="empty" style="padding:16px;">No trades yet</div>';return;}
-  let cur=0,best=0,tmp=0;
-  let curLose=0,worstLose=0,tmpLose=0;
+  let cur=0,best=0,tmp=0,tmpLose=0,worstLose=0;
   trades.forEach(e=>{
     if(e.pnl>0){tmp++;tmpLose=0;}
     else{tmpLose++;tmp=0;}
     if(tmp>best)best=tmp;
     if(tmpLose>worstLose)worstLose=tmpLose;
   });
-  // current streak
   for(let i=trades.length-1;i>=0;i--){
     if(i===trades.length-1){cur=trades[i].pnl>0?1:-1;continue;}
     if(trades[i].pnl>0&&cur>0)cur++;
     else if(trades[i].pnl<0&&cur<0)cur--;
     else break;
   }
-  const totalTrades=trades.length;
   const wins=trades.filter(e=>e.pnl>0).length;
-  const winRate=totalTrades?Math.round(wins/totalTrades*100):0;
+  const winRate=trades.length?Math.round(wins/trades.length*100):0;
   const bestT=trades.reduce((b,e)=>e.pnl>b.pnl?e:b,trades[0]);
-  const worstT=trades.reduce((w,e)=>e.net_pnl<w.net_pnl?e:w,trades[0]);
   const curColor=cur>0?'var(--grn)':cur<0?'var(--red)':'var(--t3)';
-  const curLabel=cur>0?`${cur} win streak 🔥`:cur<0?`${Math.abs(cur)} loss streak`:'—';
   el.innerHTML=`<div class="streak-grid">
     <div class="streak-item"><div class="streak-num" style="color:${curColor}">${Math.abs(cur)||'—'}</div><div class="streak-lbl">Current streak</div><div style="font-size:10px;color:${curColor};margin-top:3px;font-family:'JetBrains Mono',monospace;">${cur>0?'winning':cur<0?'losing':''}</div></div>
     <div class="streak-item"><div class="streak-num" style="color:var(--grn)">${best}</div><div class="streak-lbl">Best win streak</div></div>
@@ -1469,6 +1459,9 @@ function renderStreak(){
   </div>`;
 }
 
+async function refreshData(){
+  const icon=document.getElementById('refresh-icon');
+  if(icon)icon.classList.add('spin');
   await loadAll();
   if(icon)icon.classList.remove('spin');
   toast('Data synced ✓');
