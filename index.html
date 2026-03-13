@@ -552,9 +552,15 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
     <div class="modal-title" id="modal-entry-title">Add P&L entry</div>
     <div class="fg"><label>Week of</label><input type="date" id="e-date"></div>
     <div class="fg"><label>Company / Asset</label><input type="text" id="e-company" placeholder="e.g. Micron Technology"></div>
-    <div class="fg"><label>Gross gain (€)</label><input type="number" id="e-pnl" placeholder="e.g. 12218.60" step="0.01"></div>
-    <div class="fg"><label>Tax paid (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="number" id="e-tax" placeholder="e.g. 3222.65" step="0.01"></div>
-    <div class="fg"><label>Note <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="text" id="e-note" placeholder="e.g. Call 320$, Stop Sell"></div>
+    <div class="fg"><label>TR Gain (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">from Performance screen</span></label><input type="number" id="e-pnl" placeholder="e.g. 12218.60" step="0.01" oninput="updateNetPreview()"></div>
+    <div class="fg"><label>Tax & fees (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="number" id="e-tax" placeholder="e.g. 3223.65" step="0.01" oninput="updateNetPreview()"></div>
+    <!-- Net profit preview -->
+    <div id="net-preview" style="display:none;background:var(--bg3);border:0.5px solid var(--line2);border-radius:var(--r2);padding:12px 14px;margin-bottom:4px;">
+      <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;">Net profit (toward 100k goal)</div>
+      <div id="net-preview-val" style="font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-0.5px;"></div>
+      <div id="net-preview-breakdown" style="font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:3px;"></div>
+    </div>
+    <div class="fg"><label>Trade details <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="text" id="e-note" placeholder="e.g. Call 320$ · 1,000 warrants"></div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-entry')">Cancel</button>
       <button class="btn-primary" onclick="saveEntry()">Save entry</button>
@@ -705,11 +711,31 @@ function openAddPosition(){
   openModal('modal-position');
 }
 function openAddDividend(){openModal('modal-dividend');}
+function updateNetPreview(){
+  const pnl=parseFloat(document.getElementById('e-pnl').value)||0;
+  const tax=parseFloat(document.getElementById('e-tax').value)||0;
+  const preview=document.getElementById('net-preview');
+  const val=document.getElementById('net-preview-val');
+  const breakdown=document.getElementById('net-preview-breakdown');
+  if(pnl===0){preview.style.display='none';return;}
+  const net=parseFloat((pnl-tax).toFixed(2));
+  preview.style.display='block';
+  val.textContent=fmtE(net);
+  val.style.color=net>=0?'var(--grn)':'var(--red)';
+  if(tax>0){
+    breakdown.textContent='TR gain '+fmtE(pnl,false)+' − tax & fees '+fmtE(tax,false);
+  } else {
+    breakdown.textContent='No tax entered — add tax & fees to see real net profit';
+    breakdown.style.color='var(--amb)';
+  }
+}
+
 function openAddEntry(){
   editEntryId=null;
   document.getElementById('modal-entry-title').textContent='Add P&L entry';
   document.getElementById('e-date').value=iso(new Date());
   ['e-pnl','e-tax','e-company','e-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('net-preview').style.display='none';
   openModal('modal-entry');
 }
 
@@ -723,6 +749,7 @@ function editEntry(id){
   document.getElementById('e-pnl').value=e.pnl;
   document.getElementById('e-tax').value=e.tax||'';
   document.getElementById('e-note').value=e.note||'';
+  updateNetPreview();
   openModal('modal-entry');
 }
 
@@ -1097,7 +1124,7 @@ function renderHistory(){
           <div class="hdate">${e.date}</div>
           ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
           ${e.note?`<div class="hnote">${e.note}</div>`:''}
-          ${hasTax?`<div class="hnote" style="color:var(--t3);">gross ${fmtE(e.pnl)} · tax −${fmtE(e.tax,false)}</div>`:''}
+          ${hasTax?`<div class="hnote" style="color:var(--t3);">proceeds ${fmtE(e.pnl)} · tax & fees −${fmtE(e.tax,false)}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0;margin-right:8px;">
           <div class="hpnl" style="color:${net>=0?'var(--grn)':'var(--red)'}">${fmtE(net)}</div>
