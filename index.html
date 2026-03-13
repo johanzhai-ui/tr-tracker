@@ -398,7 +398,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
         <div class="desktop-topbar">
           <div>
             <h2>Dashboard</h2>
-            <div style="font-size:12px;color:var(--t2);margin-top:3px;font-family:'JetBrains Mono',monospace;" id="d-tagline">P&L Tracker</div>
+            <div style="font-size:12px;color:var(--t2);margin-top:3px;font-family:'JetBrains Mono',monospace;" id="d-tagline">Warrant Trading Performance</div>
           </div>
           <div class="topbar-actions">
             <button class="btn-ghost" id="refresh-btn-desktop" onclick="refreshData()">&#8635; Sync</button>
@@ -406,34 +406,41 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
           </div>
         </div>
 
-        <!-- Hero net P&L + goal side by side -->
+        <!-- Hero: Net P&L + Expectancy side by side -->
         <div class="dash-grid-2" style="margin-bottom:10px;">
           <div class="card" style="margin-bottom:0;">
-            <div class="card-label">Net realized P&L</div>
+            <div class="card-label">Net realized P&L (after tax)</div>
             <div class="hero-val" id="d-networth">0,00 €</div>
             <div class="hero-sub" style="margin-top:6px;">
-              <span><span class="badge badge-pur" id="d-div-badge">0,00 €</span> dividends & interest</span>
+              <span id="d-gross-badge" style="font-size:12px;color:var(--t2);font-family:'JetBrains Mono',monospace;"></span>
             </div>
           </div>
           <div class="card" style="margin-bottom:0;">
-            <div class="card-label">Yearly goal</div>
-            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-              <span style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-0.5px;" id="d-goal-earned">0 €</span>
-              <span style="font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;" id="d-goal-pct">0%</span>
-            </div>
-            <div class="gbar-track"><div class="gbar-fill" id="d-gbar" style="width:0%;background:var(--grn);"></div></div>
-            <div class="gfooter" style="margin-top:4px;"><span id="d-goal-remaining"></span><span id="d-goal-deadline"></span></div>
-            <div class="projection" id="d-projection" style="margin-top:8px;font-size:10px;"></div>
+            <div class="card-label">Expectancy per trade</div>
+            <div style="font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-1px;" id="d-expectancy">—</div>
+            <div style="font-size:11px;font-family:'JetBrains Mono',monospace;margin-top:6px;color:var(--t3);">avg profit × win% − avg loss × loss%</div>
+            <div style="font-size:11px;font-family:'JetBrains Mono',monospace;margin-top:3px;" id="d-expectancy-label"></div>
           </div>
         </div>
 
-        <!-- Monthly target - full width -->
+        <!-- Monthly target -->
         <div class="card" style="margin-bottom:10px;" id="d-monthly-target"></div>
 
-        <!-- Key metrics 2x2 grid on mobile -->
-        <div class="metrics-row" id="d-metrics"></div>
+        <!-- Warrant performance metrics 4-wide -->
+        <div class="metrics-row" id="d-metrics" style="grid-template-columns:1fr 1fr;"></div>
 
-        <!-- Chart full width on mobile -->
+        <!-- Yearly goal -->
+        <div class="card" style="margin-bottom:10px;">
+          <div class="card-label">Yearly goal — <span id="d-goal-pct" style="color:var(--grn);">0%</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <span style="font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;" id="d-goal-earned">0 €</span>
+            <span style="font-size:12px;color:var(--t2);font-family:'JetBrains Mono',monospace;" id="d-goal-remaining"></span>
+          </div>
+          <div class="gbar-track"><div class="gbar-fill" id="d-gbar" style="width:0%;background:var(--grn);"></div></div>
+          <div class="projection" id="d-projection" style="margin-top:8px;font-size:10px;"></div>
+        </div>
+
+        <!-- Cumulative chart -->
         <div class="card" style="margin-bottom:10px;">
           <div class="sh">
             <div class="sh-title">Cumulative P&L vs goal pace</div>
@@ -445,9 +452,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
           <div class="chart-wrap" style="height:180px;"><canvas id="chart-cum"></canvas></div>
         </div>
 
-        <!-- Streak full width -->
+        <!-- Streak & Stats -->
         <div class="card" style="margin-bottom:10px;">
-          <div class="sh"><div class="sh-title">Streak & stats</div></div>
+          <div class="sh"><div class="sh-title">Streak & Stats</div></div>
           <div id="d-streak-content"></div>
         </div>
       </div>
@@ -1195,8 +1202,7 @@ function renderDashboard(){
   document.getElementById('d-goal-pct').style.color=bc;
   document.getElementById('d-gbar').style.width=pct.toFixed(1)+'%';
   document.getElementById('d-gbar').style.background=bc;
-  document.getElementById('d-goal-remaining').textContent=fmtE(Math.max(0,goal.total-totalRealPnL),false)+' left';
-  document.getElementById('d-goal-deadline').textContent='by '+goal.deadline;
+  document.getElementById('d-goal-remaining').textContent=fmtE(Math.max(0,goal.total-totalRealPnL),false)+' left  ·  by '+goal.deadline;
   document.getElementById('sf-goal-text').textContent=fmtE(totalRealPnL,false)+' / '+goal.total.toLocaleString('de-DE')+' €';
 
   document.getElementById('sf-bar').style.width=pct.toFixed(1)+'%';
@@ -1217,32 +1223,69 @@ function renderDashboard(){
     proj.textContent=weeksLeft+' weeks until deadline. Add P&L entries to see your projection.';
   }
 
-  const totalGross=sorted.filter(e=>e.category==='trade'||!e.category).reduce((s,e)=>s+e.pnl,0);
+  // ── WARRANT PERFORMANCE METRICS ──
+  const trades=sorted.filter(e=>e.category==='trade'||!e.category);
+  const totalGross=trades.reduce((s,e)=>s+e.pnl,0);
   const totalTax=sorted.reduce((s,e)=>s+(e.tax||0),0);
-  const taxCorrections=sorted.filter(e=>e.category==='tax_correction').reduce((s,e)=>s+e.pnl,0);
   const totalInterest=sorted.filter(e=>e.category==='interest').reduce((s,e)=>s+e.pnl,0);
   const totalDivsPnL=sorted.filter(e=>e.category==='dividend').reduce((s,e)=>s+e.pnl,0);
-  const bestTrade=sorted.filter(e=>e.category==='trade'||!e.category).reduce((b,e)=>e.pnl>b?e.pnl:b,0);
-  // Weekly target indicator
-  const thisWeekStart=new Date();thisWeekStart.setDate(thisWeekStart.getDate()-thisWeekStart.getDay()+1);
-  const thisWeekKey=iso(thisWeekStart).slice(0,10);
+
+  // Win/loss split
+  const winTrades=trades.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)>0);
+  const lossTrades=trades.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)<=0);
+  const winRate=trades.length?winTrades.length/trades.length:0;
+  const lossRate=1-winRate;
+  const avgWin=winTrades.length?winTrades.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0)/winTrades.length:0;
+  const avgLoss=lossTrades.length?Math.abs(lossTrades.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0)/lossTrades.length):0;
+
+  // Expectancy = (win% × avg win) - (loss% × avg loss)
+  const expectancy=parseFloat(((winRate*avgWin)-(lossRate*avgLoss)).toFixed(2));
+  const expEl=document.getElementById('d-expectancy');
+  const expLbl=document.getElementById('d-expectancy-label');
+  if(expEl){
+    expEl.textContent=trades.length?fmtE(expectancy):'—';
+    expEl.style.color=expectancy>0?'var(--grn)':expectancy<0?'var(--red)':'var(--t2)';
+  }
+  if(expLbl){
+    if(trades.length>=3){
+      expLbl.textContent=expectancy>0?`Positive edge — keep trading this system`:`Negative edge — review your strategy`;
+      expLbl.style.color=expectancy>0?'var(--grn)':'var(--red)';
+    } else {
+      expLbl.textContent='Need 3+ trades for reliable data';
+      expLbl.style.color='var(--t3)';
+    }
+  }
+
+  // Gross badge
+  const grossBadge=document.getElementById('d-gross-badge');
+  if(grossBadge) grossBadge.textContent=`Gross ${fmtE(totalGross,false)} · Tax −${fmtE(totalTax,false)}`;
+
+  // Best & worst trade
+  const bestT=trades.length?trades.reduce((b,e)=>(e.net_pnl||e.pnl)>(b.net_pnl||b.pnl)?e:b,trades[0]):null;
+  const worstT=trades.length?trades.reduce((w,e)=>(e.net_pnl||e.pnl)<(w.net_pnl||w.pnl)?e:w,trades[0]):null;
+
+  // Profit factor = gross wins / gross losses
+  const grossWins=winTrades.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0);
+  const grossLosses=Math.abs(lossTrades.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0));
+  const profitFactor=grossLosses>0?(grossWins/grossLosses).toFixed(2):'∞';
+
+  // Monthly stats
   const thisMonthK=iso(new Date()).slice(0,7);
-  const monthNet=Object.keys({}).constructor===Object?0:0; // placeholder
   const currentMonthEntries=sorted.filter(e=>e.date.slice(0,7)===thisMonthK);
   const currentMonthNet=currentMonthEntries.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0);
-  const monthPct=goal.monthly>0?Math.min(100,(currentMonthNet/goal.monthly)*100):0;
-  const monthColor=monthPct>=100?'var(--grn)':monthPct>=75?'var(--grn)':monthPct>=40?'var(--amb)':'var(--red)';
+  const monthPct=goal.monthly>0?(currentMonthNet/goal.monthly)*100:0;
+  const monthColor=monthPct>=100?'var(--grn)':monthPct>=75?'var(--blu)':monthPct>=40?'var(--amb)':'var(--red)';
 
   document.getElementById('d-metrics').innerHTML=[
-    ['Net realized P&L',fmtE(totalRealPnL),totalRealPnL>=0?'var(--grn)':'var(--red)'],
-    ['Gross (before tax)',fmtE(totalGross,true),'var(--blu)'],
-    ['Tax paid',fmtE(-totalTax,false),'var(--red)'],
-    ['Avg / week',fmtE(avgW),avgW>=0?'var(--grn)':'var(--red)'],
-    ['Win rate',sorted.filter(e=>e.category==='trade'||!e.category).length?Math.round(wins/Math.max(1,sorted.filter(e=>e.category==='trade'||!e.category).length)*100)+'%':'—',wins>=losses?'var(--grn)':'var(--red)'],
-    ['Interest income',fmtE(totalInterest,false),'var(--blu)'],
-    ['Dividends',fmtE(totalDivsPnL,false),'var(--pur)'],
-    ['Tax corrections',fmtE(taxCorrections),'var(--amb)'],
-  ].map(([l,v,c])=>`<div class="mcard"><div class="ml">${l}</div><div class="mv" style="color:${c}">${v}</div></div>`).join('');
+    ['Win rate',trades.length?Math.round(winRate*100)+'%  ('+winTrades.length+'/'+trades.length+')':'—',winRate>=0.5?'var(--grn)':'var(--red)'],
+    ['Profit factor',trades.length?profitFactor:'—',parseFloat(profitFactor)>=1?'var(--grn)':'var(--red)'],
+    ['Avg win',winTrades.length?fmtE(avgWin):'—','var(--grn)'],
+    ['Avg loss',lossTrades.length?'−'+fmtE(avgLoss,false):'—','var(--red)'],
+    ['Best trade',bestT?fmtE(bestT.net_pnl||bestT.pnl):'—','var(--grn)'],
+    ['Worst trade',worstT?fmtE(worstT.net_pnl||worstT.pnl):'—','var(--red)'],
+    ['Tax paid total','−'+fmtE(totalTax,false),'var(--t2)'],
+    ['Interest + divs',fmtE(totalInterest+totalDivsPnL,false),'var(--pur)'],
+  ].map(([l,v,c])=>`<div class="mcard"><div class="ml">${l}</div><div class="mv" style="color:${c};font-size:16px;">${v}</div></div>`).join('');
 
   // Monthly target card - with color zones
   const mtEl=document.getElementById('d-monthly-target');
@@ -1461,6 +1504,60 @@ function renderHistory(){
     </div>`;
   }).join('');
 }
+// ── STREAK & STATS ──
+function renderStreak(){
+  const el=document.getElementById('d-streak-content');
+  if(!el)return;
+  const trades=entries.filter(e=>e.category==='trade'||!e.category).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!trades.length){el.innerHTML='<div class="empty" style="padding:16px 0;">No trades yet — add your first entry in P&L Tracker</div>';return;}
+
+  // Streak calculation
+  let cur=0,best=0,tmp=0,tmpL=0,worstL=0;
+  trades.forEach(e=>{
+    const n=e.net_pnl!=null?e.net_pnl:e.pnl;
+    if(n>0){tmp++;tmpL=0;}else{tmpL++;tmp=0;}
+    if(tmp>best)best=tmp;
+    if(tmpL>worstL)worstL=tmpL;
+  });
+  for(let i=trades.length-1;i>=0;i--){
+    const n=trades[i].net_pnl!=null?trades[i].net_pnl:trades[i].pnl;
+    if(i===trades.length-1){cur=n>0?1:-1;continue;}
+    const prev=trades[i].net_pnl!=null?trades[i].net_pnl:trades[i].pnl;
+    if(n>0&&cur>0)cur++;
+    else if(n<=0&&cur<0)cur--;
+    else break;
+  }
+
+  const winTrades=trades.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)>0);
+  const winRate=trades.length?Math.round(winTrades.length/trades.length*100):0;
+  const bestT=trades.reduce((b,e)=>(e.net_pnl||e.pnl)>(b.net_pnl||b.pnl)?e:b,trades[0]);
+  const curColor=cur>0?'var(--grn)':cur<0?'var(--red)':'var(--t3)';
+  const curLabel=cur>0?`${Math.abs(cur)} trades in a row ↑`:cur<0?`${Math.abs(cur)} trades in a row ↓`:'—';
+
+  el.innerHTML=`<div class="streak-grid">
+    <div class="streak-item">
+      <div class="streak-num" style="color:${curColor}">${Math.abs(cur)||'—'}</div>
+      <div class="streak-lbl">Current streak</div>
+      <div style="font-size:10px;color:${curColor};margin-top:4px;font-family:'JetBrains Mono',monospace;">${curLabel}</div>
+    </div>
+    <div class="streak-item">
+      <div class="streak-num" style="color:var(--grn)">${best}</div>
+      <div class="streak-lbl">Best win streak</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px;font-family:'JetBrains Mono',monospace;">${worstL} worst lose streak</div>
+    </div>
+    <div class="streak-item">
+      <div class="streak-num" style="color:var(--amb)">${winRate}%</div>
+      <div class="streak-lbl">Win rate</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px;font-family:'JetBrains Mono',monospace;">${winTrades.length} wins / ${trades.length-winTrades.length} losses</div>
+    </div>
+    <div class="streak-item">
+      <div class="streak-num" style="color:var(--grn);font-size:18px;">${fmtE(bestT.net_pnl||bestT.pnl,false)}</div>
+      <div class="streak-lbl">Best trade</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px;font-family:'JetBrains Mono',monospace;">${bestT.company||bestT.date}</div>
+    </div>
+  </div>`;
+}
+
 async function refreshData(){
   const icon=document.getElementById('refresh-icon');
   if(icon)icon.classList.add('spin');
