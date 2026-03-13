@@ -207,6 +207,20 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 .hdate{font-size:12px;color:var(--t2);font-family:'JetBrains Mono',monospace;}
 .hnote{font-size:11px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .hpnl{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;flex-shrink:0;}
+/* Month group */
+.month-group{margin-bottom:10px;}
+.month-header{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--bg2);border:0.5px solid var(--line);border-radius:var(--r2);cursor:pointer;user-select:none;transition:border-color 0.15s;}
+.month-header:hover{border-color:var(--line2);}
+.month-header.open{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent;}
+.month-chevron{width:16px;height:16px;flex-shrink:0;color:var(--t3);transition:transform 0.2s;}
+.month-chevron.open{transform:rotate(90deg);}
+.month-name{font-size:13px;font-weight:700;flex:1;}
+.month-meta{font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;}
+.month-total{font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;margin-left:8px;}
+.month-entries{display:none;border:0.5px solid var(--line);border-top:none;border-bottom-left-radius:var(--r2);border-bottom-right-radius:var(--r2);overflow:hidden;}
+.month-entries.open{display:block;}
+.hrow{background:var(--bg2);border:none;border-top:0.5px solid var(--line);border-radius:0;padding:10px 14px;display:flex;align-items:center;gap:10px;}
+.hrow:first-child{border-top:none;}
 
 /* MONTH ROWS */
 .mrow{background:var(--bg2);border:0.5px solid var(--line);border-radius:var(--r2);padding:11px 13px;display:flex;align-items:center;gap:10px;}
@@ -1032,34 +1046,79 @@ function renderPnL(){
   }).join('');
 }
 
+function toggleMonth(key){
+  const entries_el=document.getElementById('month-entries-'+key);
+  const chevron=document.getElementById('month-chevron-'+key);
+  const header=document.getElementById('month-header-'+key);
+  const isOpen=entries_el.classList.contains('open');
+  entries_el.classList.toggle('open',!isOpen);
+  chevron.classList.toggle('open',!isOpen);
+  header.classList.toggle('open',!isOpen);
+}
+
 function renderHistory(){
   const sorted=[...entries].sort((a,b)=>b.date.localeCompare(a.date));
   const hc=document.getElementById('h-count');if(hc)hc.textContent=sorted.length+' entries';
   const hl=document.getElementById('h-list'),he=document.getElementById('h-empty');
   if(!sorted.length){hl.innerHTML='';he.style.display='block';return;}
   he.style.display='none';
+
+  // Build cumulative map (ascending)
   let c=0;const cumMap={};
-  [...entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{c+=(e.net_pnl!=null?e.net_pnl:e.pnl);cumMap[e.id]=parseFloat(c.toFixed(2));});
-  hl.innerHTML=sorted.map(e=>{
-    const net=e.net_pnl!=null?e.net_pnl:e.pnl;
-    const hasTax=e.tax&&e.tax>0;
-    return `<div class="hrow">
-    <div class="hdot" style="background:${net>=0?'var(--grn)':'var(--red)'}"></div>
-    <div class="hinfo">
-      <div class="hdate">${e.date} <span style="color:var(--t3);">${monthLbl(monthKey(e.date))}</span></div>
-      ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
-      ${e.note?`<div class="hnote">${e.note}</div>`:''}
-      ${hasTax?`<div class="hnote" style="color:var(--t3);">gross ${fmtE(e.pnl)} · tax −${fmtE(e.tax,false)}</div>`:''}
-    </div>
-    <div style="text-align:right;flex-shrink:0;">
-      <div class="hpnl" style="color:${net>=0?'var(--grn)':'var(--red)'}">${fmtE(net)}</div>
-      <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:2px;">cum: ${fmtE(cumMap[e.id],false)}</div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
-      <button class="del-btn" onclick="editEntry('${e.id}')" style="color:var(--blu);border-color:var(--blu2);" title="Edit">✎</button>
-      <button class="del-btn" onclick="deleteEntry('${e.id}')" title="Delete">×</button>
-    </div>
-  </div>`;
+  [...entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+    c+=(e.net_pnl!=null?e.net_pnl:e.pnl);
+    cumMap[e.id]=parseFloat(c.toFixed(2));
+  });
+
+  // Group by month (descending)
+  const groups={};
+  sorted.forEach(e=>{
+    const k=monthKey(e.date);
+    if(!groups[k])groups[k]=[];
+    groups[k].push(e);
+  });
+  const currentMonthKey=iso(new Date()).slice(0,7);
+
+  hl.innerHTML=Object.keys(groups).sort((a,b)=>b.localeCompare(a)).map(k=>{
+    const monthEntries=groups[k];
+    const monthNet=parseFloat(monthEntries.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0).toFixed(2));
+    const wins=monthEntries.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)>0).length;
+    const losses=monthEntries.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)<0).length;
+    const isOpen=k===currentMonthKey;
+    const netColor=monthNet>=0?'var(--grn)':'var(--red)';
+    const fullMonthName=['January','February','March','April','May','June','July','August','September','October','November','December'][parseInt(k.slice(5))-1];
+
+    const rows=monthEntries.map(e=>{
+      const net=e.net_pnl!=null?e.net_pnl:e.pnl;
+      const hasTax=e.tax&&e.tax>0;
+      return `<div class="hrow">
+        <div class="hdot" style="background:${net>=0?'var(--grn)':'var(--red)'}"></div>
+        <div class="hinfo">
+          <div class="hdate">${e.date}</div>
+          ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
+          ${e.note?`<div class="hnote">${e.note}</div>`:''}
+          ${hasTax?`<div class="hnote" style="color:var(--t3);">gross ${fmtE(e.pnl)} · tax −${fmtE(e.tax,false)}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-right:8px;">
+          <div class="hpnl" style="color:${net>=0?'var(--grn)':'var(--red)'}">${fmtE(net)}</div>
+          <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:2px;">cum: ${fmtE(cumMap[e.id],false)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+          <button class="del-btn" onclick="editEntry('${e.id}')" style="color:var(--blu);border-color:var(--blu2);" title="Edit">✎</button>
+          <button class="del-btn" onclick="deleteEntry('${e.id}')" title="Delete">×</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="month-group">
+      <div class="month-header${isOpen?' open':''}" id="month-header-${k}" onclick="toggleMonth('${k}')">
+        <svg class="month-chevron${isOpen?' open':''}" id="month-chevron-${k}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="month-name">${fullMonthName} <span style="color:var(--t3);font-size:11px;font-weight:400;">${k.slice(0,4)}</span></div>
+        <div class="month-meta">${monthEntries.length} trade${monthEntries.length!==1?'s':''} · ${wins}W ${losses}L</div>
+        <div class="month-total" style="color:${netColor}">${fmtE(monthNet)}</div>
+      </div>
+      <div class="month-entries${isOpen?' open':''}" id="month-entries-${k}">${rows}</div>
+    </div>`;
   }).join('');
 }
 
