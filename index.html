@@ -535,10 +535,12 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 <div class="modal-bg" id="modal-entry">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Add weekly P&L entry</div>
+    <div class="modal-title" id="modal-entry-title">Add P&L entry</div>
     <div class="fg"><label>Week of</label><input type="date" id="e-date"></div>
-    <div class="fg"><label>Realized P&L (€)</label><input type="number" id="e-pnl" placeholder="e.g. 1250 or -340" step="0.01"></div>
-    <div class="fg"><label>Note (optional)</label><input type="text" id="e-note" placeholder="e.g. Sold AAPL, ETF rebalance"></div>
+    <div class="fg"><label>Company / Asset</label><input type="text" id="e-company" placeholder="e.g. Micron Technology"></div>
+    <div class="fg"><label>Gross gain (€)</label><input type="number" id="e-pnl" placeholder="e.g. 12218.60" step="0.01"></div>
+    <div class="fg"><label>Tax paid (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="number" id="e-tax" placeholder="e.g. 3222.65" step="0.01"></div>
+    <div class="fg"><label>Note <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="text" id="e-note" placeholder="e.g. Call 320$, Stop Sell"></div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-entry')">Cancel</button>
       <button class="btn-primary" onclick="saveEntry()">Save entry</button>
@@ -596,7 +598,7 @@ async function sbDelete(table,id){
 
 let entries=[], positions=[], dividends=[];
 let goal={total:100000,monthly:10000,deadline:'2026-12-31'};
-let editPosId=null, posFilter='all', loading=true;
+let editPosId=null, editEntryId=null, posFilter='all', loading=true;
 
 const iso=d=>d.toISOString().split('T')[0];
 document.getElementById('e-date').value=iso(new Date());
@@ -629,7 +631,7 @@ async function loadAll(){
       sbGet('dividends','order=date.desc'),
       sbGet('goal','id=eq.1')
     ]);
-    entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),note:x.note||''}));
+    entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl)}));
     positions=p.map(x=>({id:x.id,ticker:x.ticker,name:x.name,type:x.type,shares:parseFloat(x.shares),avg:parseFloat(x.avg_price),current:parseFloat(x.current_price)}));
     dividends=d.map(x=>({id:x.id,ticker:x.ticker,amount:parseFloat(x.amount),date:x.date,note:x.note||''}));
     if(g&&g.length){goal={total:parseFloat(g[0].total),monthly:parseFloat(g[0].monthly),deadline:g[0].deadline};}
@@ -689,7 +691,26 @@ function openAddPosition(){
   openModal('modal-position');
 }
 function openAddDividend(){openModal('modal-dividend');}
-function openAddEntry(){openModal('modal-entry');}
+function openAddEntry(){
+  editEntryId=null;
+  document.getElementById('modal-entry-title').textContent='Add P&L entry';
+  document.getElementById('e-date').value=iso(new Date());
+  ['e-pnl','e-tax','e-company','e-note'].forEach(id=>document.getElementById(id).value='');
+  openModal('modal-entry');
+}
+
+function editEntry(id){
+  const e=entries.find(x=>x.id===id);
+  if(!e)return;
+  editEntryId=id;
+  document.getElementById('modal-entry-title').textContent='Edit P&L entry';
+  document.getElementById('e-date').value=e.date;
+  document.getElementById('e-company').value=e.company||'';
+  document.getElementById('e-pnl').value=e.pnl;
+  document.getElementById('e-tax').value=e.tax||'';
+  document.getElementById('e-note').value=e.note||'';
+  openModal('modal-entry');
+}
 
 async function savePosition(){
   const ticker=document.getElementById('p-ticker').value.trim().toUpperCase();
@@ -775,18 +796,32 @@ async function saveDividend(){
 async function saveEntry(){
   const date=document.getElementById('e-date').value;
   const pnl=parseFloat(document.getElementById('e-pnl').value);
+  const tax=parseFloat(document.getElementById('e-tax').value)||0;
+  const company=document.getElementById('e-company').value.trim();
   const note=document.getElementById('e-note').value.trim();
-  if(!date||isNaN(pnl)){toast('Please enter date and P&L');return;}
+  if(!date||isNaN(pnl)){toast('Please enter date and gross gain');return;}
+  const net=parseFloat((pnl-tax).toFixed(2));
   toast('Saving…',10000);
   try{
-    const id=uid();
-    await sbInsert('entries',[{id,date,pnl,note}]);
-    entries.push({id,date,pnl,note});
-    entries.sort((a,b)=>a.date.localeCompare(b.date));
-    render();closeModal('modal-entry');
-    document.getElementById('e-pnl').value='';
-    document.getElementById('e-note').value='';
-    toast('Entry added ✓');
+    if(editEntryId){
+      await sbUpdate('entries',editEntryId,{date,pnl,tax,company,note,net_pnl:net});
+      const idx=entries.findIndex(x=>x.id===editEntryId);
+      if(idx>-1)entries[idx]={...entries[idx],date,pnl,tax,company,note,net_pnl:net};
+      editEntryId=null;
+      entries.sort((a,b)=>a.date.localeCompare(b.date));
+      render();closeModal('modal-entry');toast('Entry updated ✓');
+    } else {
+      const id=uid();
+      await sbInsert('entries',[{id,date,pnl,note,tax,company,net_pnl:net}]);
+      entries.push({id,date,pnl,tax,company,note,net_pnl:net});
+      entries.sort((a,b)=>a.date.localeCompare(b.date));
+      render();closeModal('modal-entry');
+      document.getElementById('e-pnl').value='';
+      document.getElementById('e-tax').value='';
+      document.getElementById('e-company').value='';
+      document.getElementById('e-note').value='';
+      toast('Entry added ✓');
+    }
   }catch(err){toast('⚠ '+err.message,5000);}
 }
 
@@ -850,15 +885,15 @@ function render(){renderDashboard();renderPortfolio();renderPnL();renderHistory(
 function renderDashboard(){
   const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
   const monthMap={};
-  sorted.forEach(e=>{const k=monthKey(e.date);if(!monthMap[k])monthMap[k]=0;monthMap[k]+=e.pnl;});
+  sorted.forEach(e=>{const k=monthKey(e.date);if(!monthMap[k])monthMap[k]=0;monthMap[k]+=(e.net_pnl!=null?e.net_pnl:e.pnl);});
   const totalVal=positions.reduce((s,p)=>s+p.shares*p.current,0);
   const totalPosPnL=totalVal-positions.reduce((s,p)=>s+p.shares*p.avg,0);
   const totalDivs=dividends.reduce((s,d)=>s+d.amount,0);
   let cum=0;
-  const cumData=sorted.map(e=>{cum+=e.pnl;return parseFloat(cum.toFixed(2));});
+  const cumData=sorted.map(e=>{cum+=(e.net_pnl!=null?e.net_pnl:e.pnl);return parseFloat(cum.toFixed(2));});
   const totalRealPnL=cumData.length?cumData[cumData.length-1]:0;
-  const avgW=sorted.length?sorted.reduce((s,e)=>s+e.pnl,0)/sorted.length:0;
-  const wins=sorted.filter(e=>e.pnl>0).length,losses=sorted.filter(e=>e.pnl<0).length;
+  const avgW=sorted.length?sorted.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0)/sorted.length:0;
+  const wins=sorted.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)>0).length,losses=sorted.filter(e=>(e.net_pnl!=null?e.net_pnl:e.pnl)<0).length;
 
   const tag=positions.length+' positions · '+sorted.length+' weeks tracked';
   ['d-tagline','m-tagline'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=tag;});
@@ -971,7 +1006,7 @@ async function deleteDividend(id){
 function renderPnL(){
   const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
   const monthMap={};
-  sorted.forEach(e=>{const k=monthKey(e.date);if(!monthMap[k])monthMap[k]=0;monthMap[k]+=e.pnl;});
+  sorted.forEach(e=>{const k=monthKey(e.date);if(!monthMap[k])monthMap[k]=0;monthMap[k]+=(e.net_pnl!=null?e.net_pnl:e.pnl);});
   const monthKeys=Object.keys(monthMap).sort();
   const mVals=monthKeys.map(k=>parseFloat(monthMap[k].toFixed(2)));
   if(chartMonthly)chartMonthly.destroy();
@@ -1004,13 +1039,28 @@ function renderHistory(){
   if(!sorted.length){hl.innerHTML='';he.style.display='block';return;}
   he.style.display='none';
   let c=0;const cumMap={};
-  [...entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{c+=e.pnl;cumMap[e.id]=parseFloat(c.toFixed(2));});
-  hl.innerHTML=sorted.map(e=>`<div class="hrow">
-    <div class="hdot" style="background:${e.pnl>=0?'var(--grn)':'var(--red)'}"></div>
-    <div class="hinfo"><div class="hdate">${e.date} <span style="color:var(--t3);">${monthLbl(monthKey(e.date))}</span></div>${e.note?`<div class="hnote">${e.note}</div>`:''}</div>
-    <div style="text-align:right;flex-shrink:0;"><div class="hpnl" style="color:${e.pnl>=0?'var(--grn)':'var(--red)'}">${fmtE(e.pnl)}</div><div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:2px;">cum: ${fmtE(cumMap[e.id],false)}</div></div>
-    <button class="del-btn" onclick="deleteEntry('${e.id}')">×</button>
-  </div>`).join('');
+  [...entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{c+=(e.net_pnl!=null?e.net_pnl:e.pnl);cumMap[e.id]=parseFloat(c.toFixed(2));});
+  hl.innerHTML=sorted.map(e=>{
+    const net=e.net_pnl!=null?e.net_pnl:e.pnl;
+    const hasTax=e.tax&&e.tax>0;
+    return `<div class="hrow">
+    <div class="hdot" style="background:${net>=0?'var(--grn)':'var(--red)'}"></div>
+    <div class="hinfo">
+      <div class="hdate">${e.date} <span style="color:var(--t3);">${monthLbl(monthKey(e.date))}</span></div>
+      ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
+      ${e.note?`<div class="hnote">${e.note}</div>`:''}
+      ${hasTax?`<div class="hnote" style="color:var(--t3);">gross ${fmtE(e.pnl)} · tax −${fmtE(e.tax,false)}</div>`:''}
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+      <div class="hpnl" style="color:${net>=0?'var(--grn)':'var(--red)'}">${fmtE(net)}</div>
+      <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:2px;">cum: ${fmtE(cumMap[e.id],false)}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+      <button class="del-btn" onclick="editEntry('${e.id}')" style="color:var(--blu);border-color:var(--blu2);" title="Edit">✎</button>
+      <button class="del-btn" onclick="deleteEntry('${e.id}')" title="Delete">×</button>
+    </div>
+  </div>`;
+  }).join('');
 }
 
 async function refreshData(){
