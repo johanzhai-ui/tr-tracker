@@ -284,7 +284,55 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 </style>
 </head>
 <body>
-<div class="layout">
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="display:none;position:fixed;inset:0;background:var(--bg0);z-index:1000;display:flex;align-items:center;justify-content:center;flex-direction:column;padding:32px;">
+  <div style="width:100%;max-width:360px;">
+    <div style="text-align:center;margin-bottom:40px;">
+      <div style="font-size:36px;margin-bottom:12px;">📈</div>
+      <h1 style="font-size:26px;font-weight:700;letter-spacing:-0.5px;">TR <span style="color:var(--grn);">Pro</span></h1>
+      <div style="font-size:12px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-top:4px;">Personal P&L Tracker</div>
+    </div>
+
+    <!-- Face ID button -->
+    <div id="faceid-wrap" style="display:none;margin-bottom:16px;">
+      <button onclick="loginWithBiometrics()" style="width:100%;padding:16px;background:var(--grn2);border:0.5px solid var(--grn);border-radius:var(--r);color:var(--grn);font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke-linecap="round"/><path d="M9 3.5C9.6 3.2 10.3 3 11 3" stroke-linecap="round"/><path d="M15 3.5C14.4 3.2 13.7 3 13 3" stroke-linecap="round"/></svg>
+        Unlock with Face ID
+      </button>
+    </div>
+
+    <!-- Email/password form -->
+    <div id="login-form-wrap">
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;">Email</div>
+        <input id="login-email" type="email" autocomplete="email" placeholder="your@email.com"
+          style="width:100%;background:var(--bg2);border:0.5px solid var(--line2);border-radius:var(--r2);padding:12px 14px;color:var(--t1);font-family:'Space Grotesk',sans-serif;font-size:14px;outline:none;"
+          onfocus="this.style.borderColor='var(--grn)'" onblur="this.style.borderColor='var(--line2)'"
+          onkeydown="if(event.key==='Enter')document.getElementById('login-pass').focus()">
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em;">Password</div>
+        <input id="login-pass" type="password" autocomplete="current-password" placeholder="••••••••"
+          style="width:100%;background:var(--bg2);border:0.5px solid var(--line2);border-radius:var(--r2);padding:12px 14px;color:var(--t1);font-family:'Space Grotesk',sans-serif;font-size:14px;outline:none;"
+          onfocus="this.style.borderColor='var(--grn)'" onblur="this.style.borderColor='var(--line2)'"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button onclick="doLogin()" id="login-btn"
+        style="width:100%;padding:14px;background:var(--grn);border:none;border-radius:var(--r2);color:#000;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;cursor:pointer;">
+        Sign in
+      </button>
+      <div id="login-err" style="margin-top:12px;text-align:center;font-size:12px;color:var(--red);font-family:'JetBrains Mono',monospace;display:none;"></div>
+    </div>
+
+    <div style="text-align:center;margin-top:24px;">
+      <button id="setup-faceid-btn" onclick="setupFaceID()" style="display:none;font-size:11px;color:var(--t3);background:none;border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;text-decoration:underline;">
+        Set up Face ID for next time
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="layout" id="app-layout" style="display:none;">
 
   <!-- SIDEBAR (desktop only) -->
   <aside class="sidebar">
@@ -431,7 +479,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 
       <!-- ── SETTINGS ── -->
       <div class="sec" id="sec-settings">
-        <div class="desktop-topbar"><h2>Settings</h2></div>
+        <div class="desktop-topbar"><h2>Settings</h2>
+          <button class="btn-danger-sm" onclick="doLogout()">Sign out</button>
+        </div>
 
         <div style="max-width:560px;">
           <div class="install-card">
@@ -467,6 +517,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
     </div><!-- /main-inner -->
   </main>
 </div><!-- /layout -->
+</div><!-- /app-layout -->
 
 <!-- MOBILE BOTTOM NAV -->
 <nav class="mobile-nav">
@@ -600,24 +651,175 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 <script>
 const SB_URL='https://raouhtxqamcrftnxpvgo.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhb3VodHhxYW1jcmZ0bnhwdmdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDg2OTgsImV4cCI6MjA4ODk4NDY5OH0.eHd2Bt2OtsxOgvymxrnk3_esxLNS-SawARZOzF7XS6A';
-const H={'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
+let accessToken=null;
+const H=()=>({'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(accessToken||SB_KEY),'Prefer':'return=representation'});
+
+// ── AUTH ──
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  const btn=document.getElementById('login-btn');
+  const err=document.getElementById('login-err');
+  if(!email||!pass){showLoginErr('Please enter email and password');return;}
+  btn.textContent='Signing in…';btn.disabled=true;
+  err.style.display='none';
+  try{
+    const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY},
+      body:JSON.stringify({email,password:pass})
+    });
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error_description||data.msg||'Login failed');
+    accessToken=data.access_token;
+    sessionStorage.setItem('sb_token',accessToken);
+    sessionStorage.setItem('sb_refresh',data.refresh_token);
+    onLoginSuccess();
+  }catch(e){
+    showLoginErr(e.message);
+    btn.textContent='Sign in';btn.disabled=false;
+  }
+}
+
+function showLoginErr(msg){
+  const err=document.getElementById('login-err');
+  err.textContent=msg;err.style.display='block';
+}
+
+async function refreshSession(){
+  const rt=sessionStorage.getItem('sb_refresh');
+  if(!rt)return false;
+  try{
+    const r=await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SB_KEY},
+      body:JSON.stringify({refresh_token:rt})
+    });
+    const data=await r.json();
+    if(!r.ok)return false;
+    accessToken=data.access_token;
+    sessionStorage.setItem('sb_token',data.access_token);
+    sessionStorage.setItem('sb_refresh',data.refresh_token);
+    return true;
+  }catch(e){return false;}
+}
+
+function onLoginSuccess(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-layout').style.display='flex';
+  // Show setup Face ID button after first password login
+  if(window.PublicKeyCredential && !localStorage.getItem('faceid_registered')){
+    document.getElementById('setup-faceid-btn').style.display='inline';
+  }
+  loadAll();
+}
+
+function doLogout(){
+  accessToken=null;
+  sessionStorage.removeItem('sb_token');
+  sessionStorage.removeItem('sb_refresh');
+  localStorage.removeItem('faceid_registered');
+  document.getElementById('app-layout').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('login-pass').value='';
+  document.getElementById('faceid-wrap').style.display='none';
+  document.getElementById('setup-faceid-btn').style.display='none';
+}
+
+// ── FACE ID / WEBAUTHN ──
+async function setupFaceID(){
+  if(!window.PublicKeyCredential){toast('Face ID not supported on this device');return;}
+  try{
+    const challenge=crypto.getRandomValues(new Uint8Array(32));
+    const userId=crypto.getRandomValues(new Uint8Array(16));
+    const cred=await navigator.credentials.create({publicKey:{
+      challenge,
+      rp:{name:'TR Pro',id:location.hostname==='localhost'?'localhost':location.hostname},
+      user:{id:userId,name:'user',displayName:'TR Pro User'},
+      pubKeyCredParams:[{alg:-7,type:'public-key'},{alg:-257,type:'public-key'}],
+      authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required'},
+      timeout:60000
+    }});
+    // Store credential ID for future auth
+    const credId=btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+    localStorage.setItem('faceid_registered','1');
+    localStorage.setItem('faceid_cred_id',credId);
+    document.getElementById('setup-faceid-btn').style.display='none';
+    document.getElementById('faceid-wrap').style.display='block';
+    toast('Face ID set up ✓ — use it next time you open the app');
+  }catch(e){
+    if(e.name!=='NotAllowedError')toast('Face ID setup failed: '+e.message);
+  }
+}
+
+async function loginWithBiometrics(){
+  if(!window.PublicKeyCredential){toast('Face ID not supported');return;}
+  const storedToken=sessionStorage.getItem('sb_token');
+  if(storedToken){
+    // Try refreshing existing session first
+    accessToken=storedToken;
+    const ok=await refreshSession();
+    if(ok){onLoginSuccess();return;}
+  }
+  try{
+    const challenge=crypto.getRandomValues(new Uint8Array(32));
+    const credIdStr=localStorage.getItem('faceid_cred_id');
+    const credIdBytes=Uint8Array.from(atob(credIdStr),c=>c.charCodeAt(0));
+    await navigator.credentials.get({publicKey:{
+      challenge,
+      rpId:location.hostname==='localhost'?'localhost':location.hostname,
+      allowCredentials:[{id:credIdBytes,type:'public-key'}],
+      userVerification:'required',
+      timeout:60000
+    }});
+    // Biometric verified — restore session
+    const ok=await refreshSession();
+    if(!ok){
+      // Session expired — fall back to password
+      document.getElementById('faceid-wrap').style.display='none';
+      document.getElementById('login-form-wrap').style.display='block';
+      showLoginErr('Session expired — please sign in with password');
+      return;
+    }
+    onLoginSuccess();
+  }catch(e){
+    if(e.name!=='NotAllowedError')toast('Face ID failed: '+e.message);
+  }
+}
+
+// ── INIT: check for existing session or Face ID ──
+(async()=>{
+  const storedToken=sessionStorage.getItem('sb_token');
+  const hasFaceID=localStorage.getItem('faceid_registered')==='1';
+  if(hasFaceID){
+    document.getElementById('faceid-wrap').style.display='block';
+  }
+  if(storedToken){
+    accessToken=storedToken;
+    const ok=await refreshSession();
+    if(ok){onLoginSuccess();return;}
+  }
+  // Show login screen
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app-layout').style.display='none';
+})();
 
 async function sbGet(table,qs=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?${qs}`,{headers:H});
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${qs}`,{headers:H()});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
 async function sbInsert(table,data){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:H,body:JSON.stringify(data)});
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:H(),body:JSON.stringify(data)});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
 async function sbUpdate(table,id,data){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{...H,'Prefer':'return=minimal'},body:JSON.stringify(data)});
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{method:'PATCH',headers:{...H(),'Prefer':'return=minimal'},body:JSON.stringify(data)});
   if(!r.ok)throw new Error(await r.text());
 }
 async function sbDelete(table,id){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:H});
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{method:'DELETE',headers:H()});
   if(!r.ok)throw new Error(await r.text());
 }
 
@@ -626,8 +828,6 @@ let goal={total:100000,monthly:10000,deadline:'2026-12-31',fsa:1000,year:2026};
 let editPosId=null, editEntryId=null, posFilter='all', loading=true;
 
 const iso=d=>d.toISOString().split('T')[0];
-document.getElementById('e-date').value=iso(new Date());
-document.getElementById('dv-date').value=iso(new Date());
 
 const isMobile=()=>window.innerWidth<=768;
 window.addEventListener('resize',()=>{if(!loading)render();});
@@ -643,6 +843,9 @@ function hideLoading(){
 }
 
 async function loadAll(){
+  // Set default dates now that DOM is visible
+  try{document.getElementById('e-date').value=iso(new Date());}catch(e){}
+  try{document.getElementById('dv-date').value=iso(new Date());}catch(e){}
   showLoading('Syncing your data…');
   try{
     const [e,p,d,g]=await Promise.all([
@@ -936,9 +1139,9 @@ async function clearAll(){
   toast('Clearing…',10000);
   try{
     await Promise.all([
-      fetch(`${SB_URL}/rest/v1/entries?id=neq.null`,{method:'DELETE',headers:H}),
-      fetch(`${SB_URL}/rest/v1/positions?id=neq.null`,{method:'DELETE',headers:H}),
-      fetch(`${SB_URL}/rest/v1/dividends?id=neq.null`,{method:'DELETE',headers:H})
+      fetch(`${SB_URL}/rest/v1/entries?id=neq.null`,{method:'DELETE',headers:H()}),
+      fetch(`${SB_URL}/rest/v1/positions?id=neq.null`,{method:'DELETE',headers:H()}),
+      fetch(`${SB_URL}/rest/v1/dividends?id=neq.null`,{method:'DELETE',headers:H()})
     ]);
     entries=[];positions=[];dividends=[];
     render();toast('All data cleared');
@@ -1270,8 +1473,6 @@ function renderStreak(){
   if(icon)icon.classList.remove('spin');
   toast('Data synced ✓');
 }
-
-loadAll();
 
 if('serviceWorker' in navigator){
   const sw=`self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',()=>clients.claim());self.addEventListener('fetch',e=>{if(e.request.mode==='navigate')e.respondWith(fetch(e.request).catch(()=>caches.match('/')));});`;
