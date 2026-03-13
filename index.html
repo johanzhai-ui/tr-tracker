@@ -354,11 +354,10 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
         <!-- Hero + goal on desktop: side by side -->
         <div class="dash-grid-2" style="margin-bottom:14px;">
           <div class="card">
-            <div class="card-label">Total portfolio value</div>
+            <div class="card-label">Total realized P&L (net after tax)</div>
             <div class="hero-val" id="d-networth">0,00 €</div>
             <div class="hero-sub">
-              <span><span class="badge" id="d-pos-pnl-badge">—</span> unrealized P&L</span>
-              <span><span class="badge badge-pur" id="d-div-badge">0,00 €</span> dividends</span>
+              <span><span class="badge badge-pur" id="d-div-badge">0,00 €</span> dividends & interest</span>
             </div>
           </div>
           <div class="card">
@@ -631,12 +630,7 @@ document.getElementById('e-date').value=iso(new Date());
 document.getElementById('dv-date').value=iso(new Date());
 
 const isMobile=()=>window.innerWidth<=768;
-function updateMobilePortfolioBtn(){
-  const btn=document.getElementById('m-add-pos-btn');
-  if(btn)btn.style.display=isMobile()?'block':'none';
-}
-updateMobilePortfolioBtn();
-window.addEventListener('resize',()=>{updateMobilePortfolioBtn();if(!loading)render();});
+window.addEventListener('resize',()=>{if(!loading)render();});
 
 function showLoading(msg='Loading…'){
   const o=document.getElementById('loading-overlay');
@@ -969,15 +963,13 @@ function exportCSV(){
   a.download='tr_tracker_'+iso(new Date())+'.csv';a.click();toast('CSV downloaded');
 }
 
-let chartCum,chartMonthly,chartAlloc;
+let chartCum,chartMonthly;
 function render(){renderDashboard();renderPnL();renderHistory();renderStreak();}
 
 function renderDashboard(){
   const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
   const monthMap={};
   sorted.forEach(e=>{const k=monthKey(e.date);if(!monthMap[k])monthMap[k]=0;monthMap[k]+=(e.net_pnl!=null?e.net_pnl:e.pnl);});
-  const totalVal=positions.reduce((s,p)=>s+p.shares*p.current,0);
-  const totalPosPnL=totalVal-positions.reduce((s,p)=>s+p.shares*p.avg,0);
   const totalDivs=dividends.reduce((s,d)=>s+d.amount,0);
   let cum=0;
   const cumData=sorted.map(e=>{cum+=(e.net_pnl!=null?e.net_pnl:e.pnl);return parseFloat(cum.toFixed(2));});
@@ -987,9 +979,7 @@ function renderDashboard(){
 
   const tag=positions.length+' positions · '+sorted.length+' weeks tracked';
   ['d-tagline','m-tagline'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=tag;});
-  document.getElementById('d-networth').textContent=fmtE(totalVal,false);
-  const pb=document.getElementById('d-pos-pnl-badge');
-  pb.textContent=fmtE(totalPosPnL);pb.className='badge '+(totalPosPnL>=0?'badge-grn':'badge-red');
+  document.getElementById('d-networth').textContent=fmtE(totalRealPnL,false);
   document.getElementById('d-div-badge').textContent=fmtE(totalDivs,false);
 
   const pct=Math.max(0,Math.min(100,(totalRealPnL/goal.total)*100));
@@ -1089,51 +1079,10 @@ function renderDashboard(){
     y:{ticks:{color:'#3d4460',font:{size:10,family:"'JetBrains Mono',monospace"},callback:v=>(v>=0?'+':'')+Math.round(v/1000)+'k'},grid:{color:'rgba(255,255,255,0.03)'},border:{display:false}}
   }}});
 
-  document.getElementById('d-pos-count').textContent=positions.length+' holdings';
-  if(chartAlloc)chartAlloc.destroy();
-  if(positions.length){
-    const vals=positions.map(p=>parseFloat((p.shares*p.current).toFixed(2)));
-    const cols=positions.map((_,i)=>COLORS[i%COLORS.length]);
-    chartAlloc=new Chart(document.getElementById('chart-alloc'),{type:'doughnut',data:{labels:positions.map(p=>p.ticker),datasets:[{data:vals,backgroundColor:cols,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'72%'}});
-    document.getElementById('alloc-legend').innerHTML=positions.map((p,i)=>{
-      const v=p.shares*p.current,pct=totalVal>0?(v/totalVal*100).toFixed(1):0;
-      return `<div class="alloc-item"><div class="alloc-dot" style="background:${COLORS[i%COLORS.length]};"></div>${p.ticker} ${pct}%</div>`;
-    }).join('');
-  }else{
-    chartAlloc=new Chart(document.getElementById('chart-alloc'),{type:'doughnut',data:{labels:['Empty'],datasets:[{data:[1],backgroundColor:['#1c2130'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},cutout:'72%'}});
-    document.getElementById('alloc-legend').innerHTML='';
-  }
+
 }
 
-function renderPortfolio(){
-  const filtered=posFilter==='all'?positions:positions.filter(p=>p.type===posFilter);
-  const pl=document.getElementById('pos-list'),pe=document.getElementById('pos-empty');
-  if(!filtered.length){pl.innerHTML='';pe.style.display='block';}
-  else{
-    pe.style.display='none';
-    pl.innerHTML=filtered.map(p=>{
-      const val=parseFloat((p.shares*p.current).toFixed(2)),pnl=val-p.shares*p.avg;
-      const pnlPct=p.shares*p.avg>0?(pnl/(p.shares*p.avg)*100).toFixed(2):0;
-      const ci=positions.indexOf(p);
-      return `<div class="pos-row" onclick="showPosDetail('${p.id}')">
-        <div class="pos-ticker-box" style="color:${COLORS[ci%COLORS.length]}">${p.ticker.slice(0,5)}</div>
-        <div class="pos-info"><div class="pos-name">${p.name}</div><div class="pos-meta">${p.shares.toLocaleString('de-DE',{maximumFractionDigits:4})} · <span class="badge badge-neu" style="font-size:10px;">${p.type}</span></div></div>
-        <div class="pos-right"><div class="pos-val">${fmtE(val,false)}</div><div class="pos-pnl" style="color:${pnl>=0?'var(--grn)':'var(--red)'}">${fmtE(pnl)} (${pnl>=0?'+':''}${pnlPct}%)</div></div>
-      </div>`;
-    }).join('');
-  }
-  const dl=document.getElementById('div-list'),de=document.getElementById('div-empty');
-  if(!dividends.length){dl.innerHTML='';de.style.display='block';}
-  else{
-    de.style.display='none';
-    dl.innerHTML=dividends.map(d=>`<div class="div-row">
-      <div class="div-dot"></div>
-      <div class="div-info"><div class="div-ticker">${d.ticker}</div><div class="div-date">${d.date}${d.note?' · '+d.note:''}</div></div>
-      <div class="div-val">${fmtE(d.amount,false)}</div>
-      <button class="del-btn" onclick="deleteDividend('${d.id}')">×</button>
-    </div>`).join('');
-  }
-}
+
 
 async function deleteDividend(id){
   toast('Deleting…',10000);
