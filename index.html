@@ -241,6 +241,14 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 .srow input{background:var(--bg3);border:0.5px solid var(--line2);border-radius:var(--r2);padding:8px 11px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;width:140px;text-align:right;}
 .srow input:focus{border-color:var(--grn);}
 .del-btn{width:28px;height:28px;border-radius:50%;background:none;border:0.5px solid var(--line);color:var(--t3);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cat-btn{padding:9px 8px;border-radius:var(--r2);border:0.5px solid var(--line2);background:var(--bg3);color:var(--t2);font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.15s;text-align:center;}
+.cat-btn:hover{border-color:var(--grn);color:var(--t1);}
+.cat-btn.active{background:var(--grn2);border-color:var(--grn);color:var(--grn);}
+.cat-badge{font-size:10px;padding:2px 7px;border-radius:99px;font-family:'JetBrains Mono',monospace;font-weight:500;display:inline-block;}
+.cat-trade{background:rgba(5,214,141,0.1);color:#05d68d;}
+.cat-interest{background:rgba(76,141,255,0.1);color:#4c8dff;}
+.cat-dividend{background:rgba(168,85,247,0.1);color:#a855f7;}
+.cat-tax_correction{background:rgba(245,166,35,0.1);color:#f5a623;}
 .del-btn:hover{background:var(--red2);color:var(--red);}
 
 /* ALLOC LEGEND */
@@ -357,7 +365,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
           </div>
         </div>
 
-        <div class="metrics-row" id="d-metrics"></div>
+        <div class="metrics-row" id="d-metrics" style="grid-template-columns:repeat(4,1fr);"></div>
+
+        <div class="card" style="margin-bottom:12px;" id="d-monthly-target"></div>
 
         <div class="dash-grid-2">
           <div class="card">
@@ -466,7 +476,14 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
             <div class="srow"><div><div class="sl">Yearly target</div><div class="ss">Total goal (€)</div></div><input type="number" id="s-total" step="1000"></div>
             <div class="srow"><div><div class="sl">Monthly target</div><div class="ss">Per month (€)</div></div><input type="number" id="s-monthly" step="500"></div>
             <div class="srow"><div><div class="sl">Deadline</div><div class="ss">Goal end date</div></div><input type="date" id="s-deadline"></div>
+            <div class="srow"><div><div class="sl">Year</div><div class="ss">Tracking year</div></div><input type="number" id="s-year" step="1" style="width:100px;" placeholder="2026"></div>
             <div style="margin-top:14px;"><button class="btn-primary" onclick="saveSettings()">Save settings</button></div>
+          </div>
+          <div class="card" style="margin-top:12px;">
+            <div class="card-label">Freistellungsauftrag</div>
+            <div class="srow"><div><div class="sl">Tax-free allowance</div><div class="ss">Annual limit (€1,000 single / €2,000 couples)</div></div><input type="number" id="s-fsa" step="100" placeholder="1000"></div>
+            <div id="fsa-status" style="margin-top:10px;padding:10px 12px;border-radius:var(--r2);background:var(--bg3);font-size:11px;font-family:'JetBrains Mono',monospace;"></div>
+            <div style="margin-top:10px;font-size:11px;color:var(--t3);">First €1,000 of gains/year are tax-free. The app tracks how much allowance you've used so far this year.</div>
           </div>
 
           <div class="card" style="margin-top:12px;">
@@ -549,11 +566,19 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 <div class="modal-bg" id="modal-entry">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="modal-entry-title">Add P&L entry</div>
-    <div class="fg"><label>Week of</label><input type="date" id="e-date"></div>
-    <div class="fg"><label>Company / Asset</label><input type="text" id="e-company" placeholder="e.g. Micron Technology"></div>
-    <div class="fg"><label>TR Gain (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">from Performance screen</span></label><input type="number" id="e-pnl" placeholder="e.g. 12218.60" step="0.01" oninput="updateNetPreview()"></div>
-    <!-- Auto tax preview -->
+    <div class="modal-title" id="modal-entry-title">Add entry</div>
+    <div class="fg"><label>Category</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;" id="e-category-btns">
+        <button type="button" class="cat-btn active" data-cat="trade" onclick="setCategory('trade',this)">📈 Trade</button>
+        <button type="button" class="cat-btn" data-cat="interest" onclick="setCategory('interest',this)">🏦 Interest</button>
+        <button type="button" class="cat-btn" data-cat="dividend" onclick="setCategory('dividend',this)">💰 Dividend</button>
+        <button type="button" class="cat-btn" data-cat="tax_correction" onclick="setCategory('tax_correction',this)">🔄 Tax Correction</button>
+      </div>
+    </div>
+    <div class="fg"><label>Date</label><input type="date" id="e-date"></div>
+    <div class="fg" id="e-company-wrap"><label id="e-company-label">Company / Asset</label><input type="text" id="e-company" placeholder="e.g. Micron Technology"></div>
+    <div class="fg"><label id="e-pnl-label">TR Gain (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">from Performance screen</span></label><input type="number" id="e-pnl" placeholder="e.g. 12218.60" step="0.01" oninput="updateNetPreview()"></div>
+    <!-- Auto tax preview (trade only) -->
     <div id="net-preview" style="display:none;background:var(--bg3);border:0.5px solid var(--line2);border-radius:var(--r2);padding:12px 14px;margin-bottom:4px;">
       <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Auto calculation</div>
       <div style="display:flex;justify-content:space-between;font-size:12px;font-family:'JetBrains Mono',monospace;margin-bottom:4px;">
@@ -574,7 +599,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
         <span id="net-preview-val" style="font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-0.5px;"></span>
       </div>
     </div>
-    <div class="fg"><label>Trade details <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="text" id="e-note" placeholder="e.g. Call 320$ · 1,000 warrants"></div>
+    <div class="fg"><label>Details <span style="color:var(--t3);font-weight:400;font-size:11px;">optional</span></label><input type="text" id="e-note" placeholder="e.g. Call 320$ · 1,000 warrants"></div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('modal-entry')">Cancel</button>
       <button class="btn-primary" onclick="saveEntry()">Save entry</button>
@@ -631,7 +656,7 @@ async function sbDelete(table,id){
 }
 
 let entries=[], positions=[], dividends=[];
-let goal={total:100000,monthly:10000,deadline:'2026-12-31'};
+let goal={total:100000,monthly:10000,deadline:'2026-12-31',fsa:1000,year:2026};
 let editPosId=null, editEntryId=null, posFilter='all', loading=true;
 
 const iso=d=>d.toISOString().split('T')[0];
@@ -665,13 +690,15 @@ async function loadAll(){
       sbGet('dividends','order=date.desc'),
       sbGet('goal','id=eq.1')
     ]);
-    entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl)}));
+    entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl),category:x.category||'trade'}));
     positions=p.map(x=>({id:x.id,ticker:x.ticker,name:x.name,type:x.type,shares:parseFloat(x.shares),avg:parseFloat(x.avg_price),current:parseFloat(x.current_price)}));
     dividends=d.map(x=>({id:x.id,ticker:x.ticker,amount:parseFloat(x.amount),date:x.date,note:x.note||''}));
-    if(g&&g.length){goal={total:parseFloat(g[0].total),monthly:parseFloat(g[0].monthly),deadline:g[0].deadline};}
+    if(g&&g.length){goal={total:parseFloat(g[0].total),monthly:parseFloat(g[0].monthly),deadline:g[0].deadline,fsa:parseFloat(g[0].fsa||1000),year:parseInt(g[0].year||2026)};}
     document.getElementById('s-total').value=goal.total;
     document.getElementById('s-monthly').value=goal.monthly;
     document.getElementById('s-deadline').value=goal.deadline;
+    document.getElementById('s-fsa').value=goal.fsa||1000;
+    document.getElementById('s-year').value=goal.year||2026;
     hideLoading();render();
   }catch(err){
     hideLoading();
@@ -737,7 +764,8 @@ function calcTax(gain){
 function updateNetPreview(){
   const pnl=parseFloat(document.getElementById('e-pnl').value)||0;
   const preview=document.getElementById('net-preview');
-  if(pnl===0){preview.style.display='none';return;}
+  const isTrade=currentCategory==='trade';
+  if(pnl===0||!isTrade){preview.style.display='none';return;}
   const {ket,soli,net}=calcTax(pnl);
   preview.style.display='block';
   document.getElementById('preview-gross').textContent=fmtE(pnl,false);
@@ -748,11 +776,39 @@ function updateNetPreview(){
   val.style.color=net>=0?'var(--grn)':'var(--red)';
 }
 
+let currentCategory='trade';
+const CAT_LABELS={
+  trade:{title:'Add Trade',pnlLabel:'TR Gain (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">from Performance screen</span>',company:'Company / Asset',companyPh:'e.g. Micron Technology',pnlPh:'e.g. 12218.60',tax:true},
+  interest:{title:'Add Interest',pnlLabel:'Interest received (€)',company:'Account / Note',companyPh:'e.g. Cash account',pnlPh:'e.g. 84.20',tax:false},
+  dividend:{title:'Add Dividend',pnlLabel:'Dividend amount (€)',company:'Company / Ticker',companyPh:'e.g. Apple AAPL',pnlPh:'e.g. 124.50',tax:false},
+  tax_correction:{title:'Add Tax Correction',pnlLabel:'Amount (€) <span style="color:var(--t3);font-weight:400;font-size:11px;">positive = refund, negative = extra tax</span>',company:'Reference',companyPh:'e.g. Freistellungsauftrag 2026',pnlPh:'e.g. 263.50',tax:false}
+};
+
+function setCategory(cat, btn){
+  currentCategory=cat;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const cfg=CAT_LABELS[cat];
+  document.getElementById('modal-entry-title').textContent=cfg.title;
+  document.getElementById('e-pnl-label').innerHTML=cfg.pnlLabel;
+  document.getElementById('e-company-label').textContent=cfg.company;
+  document.getElementById('e-company').placeholder=cfg.companyPh;
+  document.getElementById('e-pnl').placeholder=cfg.pnlPh;
+  updateNetPreview();
+}
+
 function openAddEntry(){
   editEntryId=null;
-  document.getElementById('modal-entry-title').textContent='Add P&L entry';
+  currentCategory='trade';
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-cat="trade"]').classList.add('active');
+  document.getElementById('modal-entry-title').textContent='Add Trade';
+  document.getElementById('e-pnl-label').innerHTML=CAT_LABELS.trade.pnlLabel;
+  document.getElementById('e-company-label').textContent='Company / Asset';
+  document.getElementById('e-company').placeholder='e.g. Micron Technology';
+  document.getElementById('e-pnl').placeholder='e.g. 12218.60';
   document.getElementById('e-date').value=iso(new Date());
-  ['e-pnl','e-tax','e-company','e-note'].forEach(id=>document.getElementById(id).value='');
+  ['e-pnl','e-company','e-note'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('net-preview').style.display='none';
   openModal('modal-entry');
 }
@@ -761,7 +817,15 @@ function editEntry(id){
   const e=entries.find(x=>x.id===id);
   if(!e)return;
   editEntryId=id;
-  document.getElementById('modal-entry-title').textContent='Edit P&L entry';
+  currentCategory=e.category||'trade';
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  const catBtn=document.querySelector(`[data-cat="${currentCategory}"]`);
+  if(catBtn)catBtn.classList.add('active');
+  const cfg=CAT_LABELS[currentCategory]||CAT_LABELS.trade;
+  document.getElementById('modal-entry-title').textContent='Edit entry';
+  document.getElementById('e-pnl-label').innerHTML=cfg.pnlLabel;
+  document.getElementById('e-company-label').textContent=cfg.company;
+  document.getElementById('e-company').placeholder=cfg.companyPh;
   document.getElementById('e-date').value=e.date;
   document.getElementById('e-company').value=e.company||'';
   document.getElementById('e-pnl').value=e.pnl;
@@ -856,26 +920,26 @@ async function saveEntry(){
   const pnl=parseFloat(document.getElementById('e-pnl').value);
   const company=document.getElementById('e-company').value.trim();
   const note=document.getElementById('e-note').value.trim();
-  if(!date||isNaN(pnl)){toast('Please enter date and TR gain');return;}
-  const {ket,soli,total:tax,net}=calcTax(pnl);
+  const category=currentCategory||'trade';
+  if(!date||isNaN(pnl)){toast('Please enter date and amount');return;}
+  let tax=0, net=pnl;
+  if(category==='trade'){const t=calcTax(pnl);tax=t.total;net=t.net;}
   toast('Saving…',10000);
   try{
     if(editEntryId){
-      await sbUpdate('entries',editEntryId,{date,pnl,tax,company,note,net_pnl:net});
+      await sbUpdate('entries',editEntryId,{date,pnl,tax,company,note,net_pnl:net,category});
       const idx=entries.findIndex(x=>x.id===editEntryId);
-      if(idx>-1)entries[idx]={...entries[idx],date,pnl,tax,company,note,net_pnl:net};
+      if(idx>-1)entries[idx]={...entries[idx],date,pnl,tax,company,note,net_pnl:net,category};
       editEntryId=null;
       entries.sort((a,b)=>a.date.localeCompare(b.date));
       render();closeModal('modal-entry');toast('Entry updated ✓');
     } else {
       const id=uid();
-      await sbInsert('entries',[{id,date,pnl,note,tax,company,net_pnl:net}]);
-      entries.push({id,date,pnl,tax,company,note,net_pnl:net});
+      await sbInsert('entries',[{id,date,pnl,note,tax,company,net_pnl:net,category}]);
+      entries.push({id,date,pnl,tax,company,note,net_pnl:net,category});
       entries.sort((a,b)=>a.date.localeCompare(b.date));
       render();closeModal('modal-entry');
-      document.getElementById('e-pnl').value='';
-      document.getElementById('e-company').value='';
-      document.getElementById('e-note').value='';
+      ['e-pnl','e-company','e-note'].forEach(id=>document.getElementById(id).value='');
       document.getElementById('net-preview').style.display='none';
       toast('Entry added ✓');
     }
@@ -895,11 +959,13 @@ async function saveSettings(){
   const t=parseFloat(document.getElementById('s-total').value);
   const m=parseFloat(document.getElementById('s-monthly').value);
   const d=document.getElementById('s-deadline').value;
+  const fsa=parseFloat(document.getElementById('s-fsa').value)||1000;
+  const yr=parseInt(document.getElementById('s-year').value)||2026;
   if(!t||!m||!d){toast('Fill in all fields');return;}
-  goal={total:t,monthly:m,deadline:d};
+  goal={total:t,monthly:m,deadline:d,fsa,year:yr};
   toast('Saving…',10000);
   try{
-    await sbUpdate('goal',1,{total:t,monthly:m,deadline:d});
+    await sbUpdate('goal',1,{total:t,monthly:m,deadline:d,fsa,year:yr});
     render();toast('Settings saved ✓');
   }catch(err){toast('⚠ '+err.message,5000);}
 }
@@ -969,6 +1035,18 @@ function renderDashboard(){
   document.getElementById('d-goal-remaining').textContent=fmtE(Math.max(0,goal.total-totalRealPnL),false)+' left';
   document.getElementById('d-goal-deadline').textContent='by '+goal.deadline;
   document.getElementById('sf-goal-text').textContent=fmtE(totalRealPnL,false)+' / '+goal.total.toLocaleString('de-DE')+' €';
+  // FSA tracker
+  const fsaEl=document.getElementById('fsa-status');
+  if(fsaEl){
+    const yearEntries=sorted.filter(e=>e.date.startsWith(String(goal.year||2026)));
+    const yearGross=yearEntries.filter(e=>e.category==='trade'||!e.category).reduce((s,e)=>s+e.pnl,0);
+    const fsaLimit=goal.fsa||1000;
+    const fsaUsed=Math.min(yearGross,fsaLimit);
+    const fsaLeft=Math.max(0,fsaLimit-yearGross);
+    const fsaPct=Math.min(100,(yearGross/fsaLimit)*100);
+    const fsaColor=fsaLeft>0?'var(--grn)':'var(--red)';
+    fsaEl.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:var(--t2);">Used ${fmtE(Math.min(yearGross,fsaLimit),false)} of ${fmtE(fsaLimit,false)}</span><span style="color:${fsaColor};">${fsaLeft>0?fmtE(fsaLeft,false)+' remaining':'Fully used'}</span></div><div style="height:4px;background:var(--bg4);border-radius:99px;overflow:hidden;"><div style="height:4px;border-radius:99px;background:${fsaColor};width:${fsaPct.toFixed(1)}%;"></div></div>`;
+  }
   document.getElementById('sf-bar').style.width=pct.toFixed(1)+'%';
   document.getElementById('sf-bar').style.background=bc;
 
@@ -987,12 +1065,48 @@ function renderDashboard(){
     proj.textContent=weeksLeft+' weeks until deadline. Add P&L entries to see your projection.';
   }
 
+  const totalGross=sorted.filter(e=>e.category==='trade'||!e.category).reduce((s,e)=>s+e.pnl,0);
+  const totalTax=sorted.reduce((s,e)=>s+(e.tax||0),0);
+  const taxCorrections=sorted.filter(e=>e.category==='tax_correction').reduce((s,e)=>s+e.pnl,0);
+  const totalInterest=sorted.filter(e=>e.category==='interest').reduce((s,e)=>s+e.pnl,0);
+  const totalDivsPnL=sorted.filter(e=>e.category==='dividend').reduce((s,e)=>s+e.pnl,0);
+  const bestTrade=sorted.filter(e=>e.category==='trade'||!e.category).reduce((b,e)=>e.pnl>b?e.pnl:b,0);
+  // Weekly target indicator
+  const thisWeekStart=new Date();thisWeekStart.setDate(thisWeekStart.getDate()-thisWeekStart.getDay()+1);
+  const thisWeekKey=iso(thisWeekStart).slice(0,10);
+  const thisMonthK=iso(new Date()).slice(0,7);
+  const monthNet=Object.keys({}).constructor===Object?0:0; // placeholder
+  const currentMonthEntries=sorted.filter(e=>e.date.slice(0,7)===thisMonthK);
+  const currentMonthNet=currentMonthEntries.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0);
+  const monthPct=goal.monthly>0?Math.min(100,(currentMonthNet/goal.monthly)*100):0;
+  const monthColor=monthPct>=100?'var(--grn)':monthPct>=75?'var(--grn)':monthPct>=40?'var(--amb)':'var(--red)';
+
   document.getElementById('d-metrics').innerHTML=[
-    ['Realized P&L',fmtE(totalRealPnL),totalRealPnL>=0?'var(--grn)':'var(--red)'],
+    ['Net realized P&L',fmtE(totalRealPnL),totalRealPnL>=0?'var(--grn)':'var(--red)'],
+    ['Gross (before tax)',fmtE(totalGross,true),'var(--blu)'],
+    ['Tax paid',fmtE(-totalTax,false),'var(--red)'],
     ['Avg / week',fmtE(avgW),avgW>=0?'var(--grn)':'var(--red)'],
-    ['Unrealized P&L',fmtE(totalPosPnL),totalPosPnL>=0?'var(--grn)':'var(--red)'],
-    ['Win rate',sorted.length?Math.round(wins/sorted.length*100)+'%':'—',wins>=losses?'var(--grn)':'var(--red)'],
+    ['Win rate',sorted.filter(e=>e.category==='trade'||!e.category).length?Math.round(wins/Math.max(1,sorted.filter(e=>e.category==='trade'||!e.category).length)*100)+'%':'—',wins>=losses?'var(--grn)':'var(--red)'],
+    ['Interest income',fmtE(totalInterest,false),'var(--blu)'],
+    ['Dividends',fmtE(totalDivsPnL,false),'var(--pur)'],
+    ['Tax corrections',fmtE(taxCorrections),'var(--amb)'],
   ].map(([l,v,c])=>`<div class="mcard"><div class="ml">${l}</div><div class="mv" style="color:${c}">${v}</div></div>`).join('');
+
+  // Monthly target progress bar
+  const mtEl=document.getElementById('d-monthly-target');
+  if(mtEl){
+    mtEl.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:11px;color:var(--t3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;">This month vs target</span>
+      <span style="font-size:12px;font-family:'JetBrains Mono',monospace;color:${monthColor};">${fmtE(currentMonthNet)} / ${fmtE(goal.monthly,false)}</span>
+    </div>
+    <div style="height:6px;background:var(--bg3);border-radius:99px;overflow:hidden;">
+      <div style="height:6px;border-radius:99px;background:${monthColor};width:${monthPct.toFixed(1)}%;transition:width 0.5s;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--t3);">
+      <span>${monthPct.toFixed(0)}% of monthly target</span>
+      <span>${fmtE(Math.max(0,goal.monthly-currentMonthNet),false)} remaining</span>
+    </div>`;
+  }
 
   const labels=sorted.map(e=>e.date);
   const goalStart=new Date(goal.deadline.slice(0,4)+'-01-01'),goalEnd=new Date(goal.deadline);
@@ -1137,7 +1251,10 @@ function renderHistory(){
       return `<div class="hrow">
         <div class="hdot" style="background:${net>=0?'var(--grn)':'var(--red)'}"></div>
         <div class="hinfo">
+          <div style="display:flex;align-items:center;gap:6px;">
           <div class="hdate">${e.date}</div>
+          <span class="cat-badge cat-${e.category||'trade'}">${{trade:'Trade',interest:'Interest',dividend:'Dividend',tax_correction:'Tax Correction'}[e.category||'trade']}</span>
+        </div>
           ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
           ${e.note?`<div class="hnote">${e.note}</div>`:''}
           ${e.pnl?`<div class="hnote" style="color:var(--t3);">gain ${fmtE(e.pnl,false)} · tax & fees −${fmtE(e.tax||parseFloat((e.pnl*0.26375+1).toFixed(2)),false)}</div>`:''}
