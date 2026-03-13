@@ -1252,10 +1252,7 @@ function renderHistory(){
   }).join('');
 }
 
-async function refreshData(){
-  const icon=document.getElementById('refresh-icon');
-  if(icon)icon.classList.add('spin');
-  await // ── SWIPE TO DELETE ──
+// ── SWIPE TO DELETE ──
 let swipeStartX={};
 function swipeStart(e,id){swipeStartX[id]=e.touches[0].clientX;}
 function swipeMove(e,id){
@@ -1270,17 +1267,19 @@ function swipeEnd(e,id){
   const el=document.getElementById('swipe-content-'+id);
   if(!el)return;
   el.style.transform='';
-  // Close other open swipes
   document.querySelectorAll('.swipe-content.swiped').forEach(s=>{if(s.id!=='swipe-content-'+id)s.classList.remove('swiped');});
   if(dx<-40)el.classList.add('swiped');
   else el.classList.remove('swiped');
 }
-// Close swipe on tap outside
 document.addEventListener('touchstart',e=>{
   if(!e.target.closest('.swipe-wrap')){
     document.querySelectorAll('.swipe-content.swiped').forEach(s=>s.classList.remove('swiped'));
   }
 });
+
+async function refreshData(){
+  const icon=document.getElementById('refresh-icon');
+  if(icon)icon.classList.add('spin');
 
 // ── STREAK RENDERER ──
 function renderStreak(){
@@ -1318,7 +1317,7 @@ function renderStreak(){
   </div>`;
 }
 
-loadAll();
+  await loadAll();
   if(icon)icon.classList.remove('spin');
   toast('Data synced ✓');
 }
