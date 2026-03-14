@@ -535,6 +535,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
       <div class="sec" id="sec-analytics">
         <div class="desktop-topbar">
           <div><h2>Analytics</h2><div style="font-size:12px;color:var(--t2);margin-top:3px;font-family:'JetBrains Mono',monospace;">Warrant trading performance breakdown</div></div>
+          <button class="btn-ghost" onclick="autoTagAllEntries()" title="Auto-detect Call/Put from trade notes">⚡ Auto-tag directions</button>
         </div>
         <!-- Call vs Put breakdown -->
         <div class="card" style="margin-bottom:12px;">
@@ -553,6 +554,15 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
         <div class="card" style="margin-bottom:12px;">
           <div class="card-label">Performance by underlying</div>
           <div id="a-underlying-content"><div class="empty"><div class="empty-icon">🏢</div>Add trades to see performance by company.</div></div>
+        </div>
+
+        <!-- Untagged trades -->
+        <div class="card" style="margin-bottom:12px;" id="a-untagged-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div class="card-label" style="margin-bottom:0;">Untagged trades <span id="a-untagged-count" style="color:var(--amb);"></span></div>
+            <button class="btn-ghost" style="font-size:11px;" onclick="autoTagAllEntries()">⚡ Auto-tag all</button>
+          </div>
+          <div id="a-untagged-list"></div>
         </div>
       </div>
 
@@ -959,7 +969,10 @@ async function loadAll(){
       sbGet('dividends','order=date.desc'),
       sbGet('goal','')
     ]);
-    entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl),category:x.category||'trade',direction:x.direction||null}));
+    entries=e.map(x=>{
+      const dir=x.direction||null;
+      return {id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl),category:x.category||'trade',direction:dir};
+    });
     positions=p.map(x=>({id:x.id,ticker:x.ticker,name:x.name,type:x.type,shares:parseFloat(x.shares),avg:parseFloat(x.avg_price),current:parseFloat(x.current_price)}));
     dividends=d.map(x=>({id:x.id,ticker:x.ticker,amount:parseFloat(x.amount),date:x.date,note:x.note||''}));
     if(g&&g.length){
@@ -1580,6 +1593,7 @@ function renderHistory(){
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <div class="hdate">${e.date}</div>
             <span class="cat-badge cat-${e.category||'trade'}">${{trade:'Trade',interest:'Interest',dividend:'Dividend',tax_correction:'Tax Correction'}[e.category||'trade']}</span>
+            ${e.direction?`<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-family:'JetBrains Mono',monospace;font-weight:700;background:${e.direction==='call'?'rgba(5,214,141,0.12)':'rgba(240,70,106,0.12)'};color:${e.direction==='call'?'var(--grn)':'var(--red)'};">${e.direction.toUpperCase()}</span>`:''}
           </div>
           ${e.company?`<div class="hnote" style="color:var(--t2);font-weight:600;">${e.company}</div>`:''}
           ${e.note?`<div class="hnote">${e.note}</div>`:''}
@@ -1719,6 +1733,48 @@ function loadDemoData(){
   try{render();}catch(e){console.error('Demo render error:',e);}
 }
 
+// ── AUTO-DETECT DIRECTION ──
+function autoDetectDirection(entry){
+  const text=((entry.note||'')+'  '+(entry.company||'')).toLowerCase();
+  if(/call/.test(text)||/long/.test(text))return 'call';
+  if(/put/.test(text)||/short/.test(text))return 'put';
+  return null;
+}
+
+async function autoTagAllEntries(){
+  const trades=entries.filter(e=>(e.category==='trade'||!e.category)&&!e.direction);
+  if(!trades.length){toast('No untagged trades found');return;}
+  let tagged=0;
+  toast('Auto-tagging…',10000);
+  for(const e of trades){
+    const dir=autoDetectDirection(e);
+    if(dir){
+      try{
+        await sbUpdate('entries',e.id,{direction:dir});
+        const idx=entries.findIndex(x=>x.id===e.id);
+        if(idx>-1)entries[idx].direction=dir;
+        tagged++;
+      }catch(err){console.error('Tag error:',err);}
+    }
+  }
+  try{renderAnalytics();renderHistory();}catch(e){}
+  toast(`Auto-tagged ${tagged} of ${trades.length} trades ✓`);
+}
+
+async function quickTagEntry(id, dir){
+  // Toggle: if already this direction, remove it
+  const entry=entries.find(e=>e.id===id);
+  if(!entry)return;
+  const newDir=entry.direction===dir?null:dir;
+  try{
+    await sbUpdate('entries',id,{direction:newDir});
+    const idx=entries.findIndex(e=>e.id===id);
+    if(idx>-1)entries[idx].direction=newDir;
+    try{renderAnalytics();renderHistory();}catch(e){}
+    toast(newDir?`Tagged as ${newDir.toUpperCase()} ✓`:'Tag removed');
+  }catch(err){toast('⚠ '+err.message,4000);}
+}
+
 // ── ANALYTICS ──
 let chartDistribution=null;
 function renderAnalytics(){
@@ -1789,6 +1845,37 @@ function renderAnalytics(){
           <div style="text-align:right;"><div style="font-size:14px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c};">${fmtE(s.totalNet)}</div></div>
         </div>`;
       }).join('')}</div>`;
+    }
+  }
+
+  // ── UNTAGGED TRADES ──
+  const untaggedCard=document.getElementById('a-untagged-card');
+  const untaggedList=document.getElementById('a-untagged-list');
+  const untaggedCount=document.getElementById('a-untagged-count');
+  const untagged=trades.filter(e=>!e.direction);
+  if(untaggedCard){
+    untaggedCard.style.display=untagged.length?'block':'none';
+  }
+  if(untaggedCount)untaggedCount.textContent=untagged.length?`(${untagged.length})`:'';
+  if(untaggedList){
+    if(!untagged.length){
+      untaggedList.innerHTML=`<div style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--grn);padding:8px 0;">✓ All trades tagged</div>`;
+    } else {
+      untaggedList.innerHTML=untagged.map(e=>{
+        const net=e.net_pnl||e.pnl;
+        const c=net>=0?'var(--grn)':'var(--red)';
+        const autoDir=autoDetectDirection(e);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:0.5px solid var(--line);">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.company||'Unknown'}</div>
+            <div style="font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;">${e.date}${e.note?' · '+e.note:''}</div>
+            ${autoDir?`<div style="font-size:10px;color:var(--amb);font-family:'JetBrains Mono',monospace;margin-top:2px;">💡 Detected: ${autoDir.toUpperCase()}</div>`:''}
+          </div>
+          <div style="font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${c};margin-right:6px;">${fmtE(net)}</div>
+          <button onclick="quickTagEntry('${e.id}','call')" style="padding:4px 8px;border-radius:99px;border:0.5px solid var(--grn);background:none;color:var(--grn);font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:700;cursor:pointer;touch-action:manipulation;">CALL</button>
+          <button onclick="quickTagEntry('${e.id}','put')" style="padding:4px 8px;border-radius:99px;border:0.5px solid var(--red);background:none;color:var(--red);font-size:10px;font-family:'JetBrains Mono',monospace;font-weight:700;cursor:pointer;touch-action:manipulation;">PUT</button>
+        </div>`;
+      }).join('');
     }
   }
 
