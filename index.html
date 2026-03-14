@@ -286,6 +286,8 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 .streak-lbl{font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-top:5px;}
 
 /* TOAST */
+.demo-banner{position:fixed;top:56px;left:0;right:0;background:rgba(245,166,35,0.12);border-bottom:0.5px solid rgba(245,166,35,0.3);z-index:150;padding:7px 20px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--amb);}
+@media(max-width:768px){.demo-banner{top:0;}}
 .toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--grn);color:#000;font-family:'JetBrains Mono',monospace;font-weight:500;border-radius:99px;padding:11px 22px;font-size:13px;opacity:0;transition:all 0.25s;pointer-events:none;z-index:400;white-space:nowrap;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 @media(min-width:769px){.toast{bottom:28px;}}
@@ -343,6 +345,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 </div>
 
 <div class="layout" id="app-layout" style="display:none;">
+<div class="demo-banner" id="demo-banner" style="display:none;">
+  ⚡ Demo Mode — sample data only · <a href="#" onclick="doLogout();return false;" style="color:var(--amb);text-decoration:underline;">Sign out</a>
+</div>
 
   <!-- TOP NAVBAR (desktop only) -->
   <header class="top-navbar">
@@ -673,6 +678,17 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 const SB_URL='https://raouhtxqamcrftnxpvgo.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhb3VodHhxYW1jcmZ0bnhwdmdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MDg2OTgsImV4cCI6MjA4ODk4NDY5OH0.eHd2Bt2OtsxOgvymxrnk3_esxLNS-SawARZOzF7XS6A';
 let accessToken=null;
+const DEMO_UUID='b89321c5-178c-4b4a-9557-505f547bf6e0';
+const YOUR_UUID='b780650b-e062-4aac-a9d8-a436cbda42b9';
+
+function getCurrentUserId(){
+  if(!accessToken)return null;
+  try{
+    const payload=JSON.parse(atob(accessToken.split('.')[1]));
+    return payload.sub||null;
+  }catch(e){return null;}
+}
+function isDemoUser(){return getCurrentUserId()===DEMO_UUID;}
 const H=()=>({'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+(accessToken||SB_KEY),'Prefer':'return=representation'});
 
 // ── AUTH ──
@@ -728,11 +744,15 @@ async function refreshSession(){
 function onLoginSuccess(){
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app-layout').style.display='flex';
-  // Show setup Face ID button after first password login
-  if(window.PublicKeyCredential && !localStorage.getItem('faceid_registered')){
+  if(window.PublicKeyCredential && !localStorage.getItem('faceid_registered')&&!isDemoUser()){
     document.getElementById('setup-faceid-btn').style.display='inline';
   }
-  loadAll();
+  if(isDemoUser()){
+    showDemoBanner();
+    loadDemoData();
+  } else {
+    loadAll();
+  }
 }
 
 function doLogout(){
@@ -826,12 +846,17 @@ async function loginWithBiometrics(){
 })();
 
 async function sbGet(table,qs=''){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?${qs}`,{headers:H()});
+  const uid=getCurrentUserId();
+  const userFilter=uid&&table!=='goal'?`user_id=eq.${uid}&`:`user_id=eq.${uid}&`;
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${userFilter}${qs}`,{headers:H()});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
 async function sbInsert(table,data){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:H(),body:JSON.stringify(data)});
+  const uid=getCurrentUserId();
+  const rows=Array.isArray(data)?data:[data];
+  const withUser=rows.map(row=>({...row,user_id:uid}));
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:H(),body:JSON.stringify(withUser)});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
@@ -1519,6 +1544,87 @@ function renderHistory(){
     </div>`;
   }).join('');
 }
+// ── DEMO MODE ──
+function showDemoBanner(){
+  const b=document.getElementById('demo-banner');
+  if(b)b.style.display='flex';
+}
+
+function loadDemoData(){
+  // Generate realistic demo warrant trading data
+  const now=new Date();
+  const year=now.getFullYear();
+
+  // Seed random but consistent per session
+  const seed=Math.floor(Date.now()/86400000); // changes daily
+  let s=seed;
+  function rand(){s=(s*1664525+1013904223)&0xffffffff;return Math.abs(s)/0xffffffff;}
+  function randBetween(a,b){return a+(b-a)*rand();}
+  function randItem(arr){return arr[Math.floor(rand()*arr.length)];}
+
+  const companies=['Micron Technology','NVIDIA','Apple','Tesla','Meta','AMD','Palantir','Shopify','ASML','Infineon'];
+  const types=['Call','Put'];
+  const notes=['Stop Sell executed','Limit order hit','Momentum play','Earnings trade','Technical breakout','Trend reversal'];
+
+  entries=[];
+  let entryId=1;
+
+  // Generate 3 months of trades (Jan, Feb, Mar of current year)
+  for(let m=0;m<3;m++){
+    const monthDate=new Date(year,m,1);
+    const tradesThisMonth=3+Math.floor(rand()*4); // 3-6 trades per month
+    for(let t=0;t<tradesThisMonth;t++){
+      const day=5+Math.floor(rand()*20);
+      const date=`${year}-${String(m+1).padStart(2,'0')}-${String(Math.min(day,28)).padStart(2,'0')}`;
+      const isWin=rand()>0.35; // 65% win rate
+      const company=randItem(companies);
+      const type=randItem(types);
+      const strike=Math.round(randBetween(50,500)/10)*10;
+      const pnl=isWin?parseFloat(randBetween(800,15000).toFixed(2)):-parseFloat(randBetween(200,3000).toFixed(2));
+      const {total:tax,net}=calcTax(Math.max(0,pnl));
+      const actualNet=pnl>0?net:pnl;
+      entries.push({
+        id:'demo-'+entryId++,
+        date,pnl,tax:pnl>0?tax:0,
+        company,
+        note:`${type} ${strike}$ · ${Math.round(randBetween(100,2000)/100)*100} warrants · ${randItem(notes)}`,
+        net_pnl:actualNet,
+        category:'trade',
+        user_id:DEMO_UUID
+      });
+    }
+    // Add monthly interest
+    const interest=parseFloat(randBetween(60,180).toFixed(2));
+    entries.push({
+      id:'demo-'+entryId++,
+      date:`${year}-${String(m+1).padStart(2,'0')}-28`,
+      pnl:interest,tax:0,
+      company:'Cash Account',
+      note:'Monthly interest 2% p.a.',
+      net_pnl:interest,
+      category:'interest',
+      user_id:DEMO_UUID
+    });
+  }
+
+  // Sort by date
+  entries.sort((a,b)=>a.date.localeCompare(b.date));
+
+  // Demo goal
+  goal={total:100000,monthly:10000,deadline:`${year}-12-31`,year};
+
+  dividends=[];
+  positions=[];
+
+  // Set settings fields
+  try{document.getElementById('s-total').value=goal.total;}catch(e){}
+  try{document.getElementById('s-monthly').value=goal.monthly;}catch(e){}
+  try{document.getElementById('s-deadline').value=goal.deadline;}catch(e){}
+  try{document.getElementById('s-year').value=goal.year;}catch(e){}
+
+  try{render();}catch(e){console.error('Demo render error:',e);}
+}
+
 // ── STREAK & STATS ──
 function renderStreak(){
   const el=document.getElementById('d-streak-content');
