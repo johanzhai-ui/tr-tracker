@@ -273,6 +273,20 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
 .empty{text-align:center;padding:36px 20px;color:var(--t3);font-size:12px;font-family:'JetBrains Mono',monospace;line-height:1.8;}
 .empty-icon{font-size:28px;margin-bottom:10px;}
 
+/* PACE CARD */
+.pace-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
+@media(min-width:769px){.pace-grid{grid-template-columns:repeat(4,1fr);}}
+.pace-item{background:var(--bg3);border-radius:var(--r2);padding:12px 14px;}
+.pace-item .pi-label{font-size:10px;color:var(--t3);font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;}
+.pace-item .pi-val{font-size:18px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:-0.5px;}
+.pace-item .pi-sub{font-size:10px;font-family:'JetBrains Mono',monospace;margin-top:4px;color:var(--t3);}
+.pace-status{margin-top:12px;padding:11px 14px;border-radius:var(--r2);font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.8;}
+.pace-week-bar{margin-top:12px;}
+.pace-week-bar-label{display:flex;justify-content:space-between;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--t3);margin-bottom:5px;}
+.pace-bar-track{height:8px;background:var(--bg3);border-radius:99px;position:relative;overflow:visible;}
+.pace-bar-actual{height:8px;border-radius:99px;position:absolute;left:0;top:0;transition:width 0.6s cubic-bezier(.4,0,.2,1);}
+.pace-bar-required{position:absolute;top:-4px;bottom:-4px;width:2px;background:rgba(255,255,255,0.5);border-radius:2px;}
+
 /* SWIPE TO DELETE */
 .swipe-wrap{position:relative;overflow:hidden;border-radius:var(--r2);margin-bottom:0;}
 .swipe-delete-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--red);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:600;border-radius:0 var(--r2) var(--r2) 0;}
@@ -454,6 +468,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Space G
           <div class="gbar-track"><div class="gbar-fill" id="d-gbar" style="width:0%;background:var(--grn);"></div></div>
           <div class="projection" id="d-projection" style="margin-top:8px;font-size:10px;"></div>
         </div>
+
+        <!-- Pace & Strategy card -->
+        <div class="card" style="margin-bottom:10px;" id="d-pace-card"></div>
 
         <!-- Cumulative chart -->
         <div class="card" style="margin-bottom:10px;">
@@ -1231,7 +1248,7 @@ function exportCSV(){
 }
 
 let chartCum,chartMonthly;
-function render(){renderDashboard();renderPnL();renderHistory();renderStreak();}
+function render(){renderDashboard();renderPnL();renderHistory();renderStreak();renderPaceCard();}
 
 function renderDashboard(){
   const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
@@ -1637,6 +1654,131 @@ function loadDemoData(){
   try{document.getElementById('s-year').value=goal.year;}catch(e){}
 
   try{render();}catch(e){console.error('Demo render error:',e);}
+}
+
+// ── PACE & STRATEGY ──
+function renderPaceCard(){
+  const el=document.getElementById('d-pace-card');
+  if(!el)return;
+
+  const today=new Date();
+  const deadline=new Date(goal.deadline);
+  const yearStart=new Date(deadline.getFullYear(),0,1);
+
+  // Calculate trading days left (Mon-Fri only)
+  let tradingDaysLeft=0;
+  const d=new Date(today);
+  d.setDate(d.getDate()+1);
+  while(d<=deadline){
+    const dow=d.getDay();
+    if(dow>=1&&dow<=5)tradingDaysLeft++;
+    d.setDate(d.getDate()+1);
+  }
+
+  // Calendar weeks left
+  const msLeft=deadline-today;
+  const weeksLeft=Math.max(0,msLeft/(7*24*3600*1000));
+  const weeksLeftRounded=Math.ceil(weeksLeft);
+
+  // Months left
+  const monthsLeft=(deadline.getFullYear()-today.getFullYear())*12+(deadline.getMonth()-today.getMonth());
+
+  // Remaining gap
+  const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
+  const totalNet=sorted.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0);
+  const gap=Math.max(0,goal.total-totalNet);
+  const ahead=totalNet>goal.total;
+
+  // Required rates
+  const reqPerWeek=weeksLeft>0?gap/weeksLeft:0;
+  const reqPerDay=tradingDaysLeft>0?gap/tradingDaysLeft:0;
+  const reqPerMonth=monthsLeft>0?gap/monthsLeft:0;
+
+  // Actual avg per week (last 4 weeks for recency)
+  const fourWeeksAgo=new Date(today);fourWeeksAgo.setDate(today.getDate()-28);
+  const recentEntries=sorted.filter(e=>new Date(e.date)>=fourWeeksAgo);
+  const recentNet=recentEntries.reduce((s,e)=>s+(e.net_pnl!=null?e.net_pnl:e.pnl),0);
+  const avgWeekRecent=recentNet/4;
+  const avgWeekAll=sorted.length>0?totalNet/(Math.max(1,(today-new Date(sorted[0].date))/(7*24*3600*1000))):0;
+
+  // On track?
+  const onTrack=avgWeekAll>=reqPerWeek||ahead;
+  const statusColor=ahead?'var(--grn)':onTrack?'var(--grn)':'var(--red)';
+  const statusBg=ahead?'rgba(5,214,141,0.07)':onTrack?'rgba(5,214,141,0.07)':'rgba(240,70,106,0.07)';
+
+  // Projected finish date based on recent avg
+  let projectedDate='—';
+  let projectedColor='var(--t3)';
+  if(avgWeekAll>0&&!ahead){
+    const weeksNeeded=gap/avgWeekAll;
+    const proj=new Date(today.getTime()+weeksNeeded*7*24*3600*1000);
+    projectedDate=proj.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'});
+    projectedColor=proj<=deadline?'var(--grn)':'var(--red)';
+  } else if(ahead){
+    projectedDate='Goal reached! 🎯';
+    projectedColor='var(--grn)';
+  }
+
+  // Bar: actual avg vs required
+  const barMax=Math.max(reqPerWeek,avgWeekAll,1)*1.3;
+  const actualBarPct=Math.min(100,(avgWeekAll/barMax)*100);
+  const reqBarPct=Math.min(98,(reqPerWeek/barMax)*100);
+  const barColor=avgWeekAll>=reqPerWeek?'var(--grn)':'var(--amb)';
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div class="card-label" style="margin-bottom:0;">Pace & Strategy — ${deadline.getFullYear()}</div>
+      <div style="font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--t3);">${weeksLeftRounded} weeks · ${tradingDaysLeft} trading days left</div>
+    </div>
+
+    <div class="pace-grid">
+      <div class="pace-item">
+        <div class="pi-label">Required / week</div>
+        <div class="pi-val" style="color:${onTrack?'var(--t1)':'var(--red)'};">${fmtE(reqPerWeek,false)}</div>
+        <div class="pi-sub">to reach ${fmtE(goal.total,false)}</div>
+      </div>
+      <div class="pace-item">
+        <div class="pi-label">Your avg / week</div>
+        <div class="pi-val" style="color:${avgWeekAll>=reqPerWeek?'var(--grn)':'var(--amb)'};">${fmtE(avgWeekAll)}</div>
+        <div class="pi-sub">all time average</div>
+      </div>
+      <div class="pace-item">
+        <div class="pi-label">Required / month</div>
+        <div class="pi-val" style="color:var(--t1);">${fmtE(reqPerMonth,false)}</div>
+        <div class="pi-sub">${monthsLeft} months remaining</div>
+      </div>
+      <div class="pace-item">
+        <div class="pi-label">Required / day</div>
+        <div class="pi-val" style="color:var(--t1);">${fmtE(reqPerDay,false)}</div>
+        <div class="pi-sub">trading days only</div>
+      </div>
+    </div>
+
+    <div class="pace-week-bar" style="margin-top:14px;">
+      <div class="pace-week-bar-label">
+        <span>Weekly pace</span>
+        <span style="color:${barColor};">${avgWeekAll>=reqPerWeek?'Above required ↑':'Below required ↓'}</span>
+      </div>
+      <div class="pace-bar-track" style="background:var(--bg3);overflow:hidden;height:8px;border-radius:99px;">
+        <div style="position:relative;height:8px;">
+          <div class="pace-bar-actual" style="width:${actualBarPct.toFixed(1)}%;background:${barColor};height:8px;border-radius:99px;"></div>
+          <div class="pace-bar-required" style="left:${reqBarPct.toFixed(1)}%;position:absolute;top:-3px;bottom:-3px;width:2px;background:rgba(255,255,255,0.6);border-radius:2px;height:14px;"></div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--t3);">
+        <span>€0</span>
+        <span style="color:rgba(255,255,255,0.5);">▲ required ${fmtE(reqPerWeek,false)}</span>
+        <span style="color:${barColor};">avg ${fmtE(avgWeekAll)}</span>
+      </div>
+    </div>
+
+    <div class="pace-status" style="background:${statusBg};color:${statusColor};">
+      ${ahead
+        ? `🎯 <strong>Goal achieved!</strong> You've already hit ${fmtE(totalNet,false)} — ${fmtE(totalNet-goal.total,false)} above target.`
+        : `<strong>${onTrack?'On track ✓':'Behind pace'}</strong> — ${fmtE(gap,false)} remaining. At your current avg of ${fmtE(avgWeekAll)}/week, projected finish: <strong style="color:${projectedColor};">${projectedDate}</strong>`
+      }
+      ${!ahead?`<br><span style="color:var(--t3);">Gap to close: ${fmtE(gap,false)} · ${weeksLeftRounded} weeks left</span>`:''}
+    </div>`;
 }
 
 // ── STREAK & STATS ──
