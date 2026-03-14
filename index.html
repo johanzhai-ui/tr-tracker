@@ -847,8 +847,10 @@ async function loginWithBiometrics(){
 
 async function sbGet(table,qs=''){
   const uid=getCurrentUserId();
-  const userFilter=uid&&table!=='goal'?`user_id=eq.${uid}&`:`user_id=eq.${uid}&`;
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?${userFilter}${qs}`,{headers:H()});
+  // Filter by user_id for all tables, ignore extra qs for goal
+  const userFilter=uid?`user_id=eq.${uid}`:'';
+  const fullQs=userFilter?(qs?`${userFilter}&${qs}`:userFilter):qs;
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${fullQs}`,{headers:H()});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
@@ -898,12 +900,18 @@ async function loadAll(){
       sbGet('entries','order=date.asc'),
       sbGet('positions','order=created_at.asc'),
       sbGet('dividends','order=date.desc'),
-      sbGet('goal','id=eq.1')
+      sbGet('goal','')
     ]);
     entries=e.map(x=>({id:x.id,date:x.date,pnl:parseFloat(x.pnl),tax:parseFloat(x.tax||0),company:x.company||'',note:x.note||'',net_pnl:parseFloat(x.net_pnl||x.pnl),category:x.category||'trade'}));
     positions=p.map(x=>({id:x.id,ticker:x.ticker,name:x.name,type:x.type,shares:parseFloat(x.shares),avg:parseFloat(x.avg_price),current:parseFloat(x.current_price)}));
     dividends=d.map(x=>({id:x.id,ticker:x.ticker,amount:parseFloat(x.amount),date:x.date,note:x.note||''}));
-    if(g&&g.length){goal={total:parseFloat(g[0].total),monthly:parseFloat(g[0].monthly),deadline:g[0].deadline,year:parseInt(g[0].year||2026)};}
+    if(g&&g.length){
+      goal={total:parseFloat(g[0].total),monthly:parseFloat(g[0].monthly),deadline:g[0].deadline,year:parseInt(g[0].year||2026)};
+    } else {
+      // No goal row yet for this user - create one
+      const uid=getCurrentUserId();
+      await sbInsert('goal',[{id:uid,total:100000,monthly:10000,deadline:'2026-12-31',year:2026}]);
+    }
     document.getElementById('s-total').value=goal.total;
     document.getElementById('s-monthly').value=goal.monthly;
     document.getElementById('s-deadline').value=goal.deadline;
@@ -1180,7 +1188,13 @@ async function saveSettings(){
   goal={total:t,monthly:m,deadline:d,year:yr};
   toast('Saving…',10000);
   try{
-    await sbUpdate('goal',1,{total:t,monthly:m,deadline:d,year:yr});
+    // Update goal by user_id
+const uid=getCurrentUserId();
+const gr=await fetch(`${SB_URL}/rest/v1/goal?user_id=eq.${uid}`,{method:'PATCH',headers:{...H(),'Prefer':'return=minimal'},body:JSON.stringify({total:t,monthly:m,deadline:d,year:yr})});
+if(!gr.ok){
+  // Try insert if no row exists yet
+  await sbInsert('goal',[{id:uid,total:t,monthly:m,deadline:d,year:yr}]);
+}
     try{render();}catch(e){console.error(e);}toast('Settings saved ✓');
   }catch(err){toast('⚠ '+err.message,5000);}
 }
